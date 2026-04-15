@@ -13,7 +13,7 @@ import {
   saveEntries,
 } from '@/lib/coffeeTypes';
 
-type Tab = 'taste' | 'log' | 'panel' | 'export';
+type Tab = 'taste' | 'pad' | 'log' | 'panel' | 'export';
 
 interface CoffeeContextValue {
   // Entries

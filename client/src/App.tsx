@@ -6,19 +6,21 @@
 
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Coffee, BookOpen, Download, Users } from "lucide-react";
+import { Coffee, BookOpen, Download, Users, Crosshair } from "lucide-react";
 import { CoffeeProvider, useCoffee } from "./contexts/CoffeeContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import TastePage from "./pages/TastePage";
+import TastePadPage from "./pages/TastePadPage";
 import LogPage from "./pages/LogPage";
 import ExportPage from "./pages/ExportPage";
 import PanelPage from "./pages/PanelPage";
 
-type Tab = 'taste' | 'log' | 'export' | 'panel';
+type Tab = 'taste' | 'pad' | 'log' | 'export' | 'panel';
 
 const TAB_CONFIG: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
   { id: 'taste', label: 'Taste', icon: <Coffee size={20} /> },
+  { id: 'pad',   label: 'Pad',   icon: <Crosshair size={20} /> },
   { id: 'log',   label: 'Log',   icon: <BookOpen size={20} /> },
   { id: 'panel', label: 'Panel', icon: <Users size={20} /> },
   { id: 'export',label: 'Export',icon: <Download size={20} /> },
@@ -32,6 +34,7 @@ function AppContent() {
       {/* Page content */}
       <div className="pb-16">
         {activeTab === 'taste'  && <TastePage />}
+        {activeTab === 'pad'    && <TastePadPage />}
         {activeTab === 'log'    && <LogPage />}
         {activeTab === 'panel'  && <PanelPage />}
         {activeTab === 'export' && <ExportPage />}
@@ -46,7 +49,7 @@ function AppContent() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center gap-0.5 px-6 py-1 rounded-xl transition-all relative ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all relative ${
                 isActive
                   ? 'text-primary'
                   : 'text-muted-foreground hover:text-foreground'
