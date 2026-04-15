@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { CoffeeEntry, getScoreHex, getScoreLabel, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
+import { CoffeeEntry, getScoreHex, getScoreLabel, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
@@ -131,14 +131,25 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
       {expanded && (
         <div className="px-3 pb-3 border-t border-border/50 pt-2 animate-fade-slide-up">
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
-            {SCORE_ATTRIBUTES.map(attr => (
-              <div key={attr.key} className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{attr.emoji} {attr.label}</span>
-                <span className="text-xs font-mono-custom font-bold text-foreground">
-                  {entry.scores[attr.key]}/9
-                </span>
-              </div>
-            ))}
+            {SCORE_ATTRIBUTES.map(attr => {
+              const { label: lvl, color: lvlColor } = getAttributeLabel(entry.scores[attr.key]);
+              return (
+                <div key={attr.key} className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{attr.emoji} {attr.label}</span>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className="text-[9px] font-medium px-1 py-0.5 rounded"
+                      style={{ backgroundColor: `${lvlColor}18`, color: lvlColor }}
+                    >
+                      {lvl}
+                    </span>
+                    <span className="text-xs font-mono-custom font-bold text-foreground">
+                      {entry.scores[attr.key]}/9
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {entry.altitude && (
             <p className="text-xs text-muted-foreground">Altitude: {entry.altitude}</p>

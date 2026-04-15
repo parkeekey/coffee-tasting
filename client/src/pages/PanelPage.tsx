@@ -27,8 +27,10 @@ import {
   getConsensusScores,
   getTop3Attributes,
   SCORE_ATTRIBUTES,
+  calculateMedian,
   calculateTotalScore,
   TastingScores,
+  getAttributeLabel,
 } from '@/lib/coffeeTypes';
 import { toast } from 'sonner';
 
@@ -149,14 +151,35 @@ export default function PanelPage() {
     setView('results');
   };
 
-  // ===== CONSENSUS BAR CHART HELPER =====
-  const getScoreDistribution = (submissions: any[], attrKey: keyof TastingScores) => {
+  // ===== CONSENSUS BAR CHART HELPERS =====
+  const getScoreDistribution = (submissions: PanelSession['submissions'], attrKey: keyof TastingScores) => {
     const scores = submissions.map(s => s.scores[attrKey]);
-    const distribution: { [key: number]: number } = {};
+    const distribution: Record<number, number> = {};
     scores.forEach(score => {
       distribution[score] = (distribution[score] || 0) + 1;
     });
     return distribution;
+  };
+
+  const getAttributeStats = (submissions: PanelSession['submissions'], attrKey: keyof TastingScores) => {
+    const distribution = getScoreDistribution(submissions, attrKey);
+    const scores = submissions.map(s => s.scores[attrKey]);
+    const mean = scores.length > 0
+      ? scores.reduce((sum, value) => sum + value, 0) / scores.length
+      : 0;
+    const median = calculateMedian(scores);
+    const maxCount = Math.max(...Object.values(distribution), 1);
+    const peakScores = Object.entries(distribution)
+      .filter(([, count]) => count === maxCount)
+      .map(([score]) => Number(score));
+
+    return {
+      distribution,
+      mean,
+      median,
+      maxCount,
+      peakScores,
+    };
   };
 
   // ===== RESULTS VIEW =====
@@ -213,55 +236,105 @@ export default function PanelPage() {
             <div className="space-y-4">
               {SCORE_ATTRIBUTES.map(attr => {
                 const score = consensus[attr.key];
+                const stats = getAttributeStats(currentSession.submissions, attr.key);
                 const isTop3 = top3.some(t => t.key === attr.key);
-                const distribution = getScoreDistribution(currentSession.submissions, attr.key);
-                const maxCount = Math.max(...Object.values(distribution), 1);
+                const isTop1 = top3[0]?.key === attr.key;
+                const { label: levelLabel, color: levelColor } = getAttributeLabel(stats.median);
 
                 return (
-                  <div key={attr.key} className="border-b border-border pb-3 last:border-0 last:pb-0">
+                  <div
+                    key={attr.key}
+                    className={`rounded-xl border p-3 ${
+                      isTop1
+                        ? 'border-amber-300 bg-amber-50/60'
+                        : isTop3
+                          ? 'border-primary/20 bg-primary/5'
+                          : 'border-border bg-muted/20'
+                    }`}
+                  >
                     {/* Attribute Header */}
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2">
                         <span>{attr.emoji}</span>
-                        <span className="font-medium text-sm">{attr.label}</span>
-                        {isTop3 && <span className="text-amber-600 text-sm">⭐</span>}
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-sm">{attr.label}</span>
+                            {isTop1 && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                Top Attribute
+                              </span>
+                            )}
+                            {!isTop1 && isTop3 && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                                Top 3
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">{attr.description}</p>
+                        </div>
                       </div>
-                      <span className="font-mono font-bold text-sm">{score.toFixed(1)}</span>
+                      <div className="text-right">
+                        <span className="font-mono font-bold text-sm block">{score.toFixed(1)}</span>
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full inline-block mt-1"
+                          style={{ backgroundColor: `${levelColor}18`, color: levelColor }}
+                        >
+                          {levelLabel} median
+                        </span>
+                      </div>
                     </div>
 
                     {/* Score Distribution Bar */}
-                    <div className="flex items-end gap-0.5 h-8">
+                    <div className="grid grid-cols-9 gap-1 items-end h-24">
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(scoreVal => {
-                        const count = distribution[scoreVal] || 0;
+                        const count = stats.distribution[scoreVal] || 0;
                         const percentage = (count / totalTasters) * 100;
-                        const barHeight = (count / maxCount) * 100;
+                        const barHeight = (count / stats.maxCount) * 100;
+                        const isPeak = stats.peakScores.includes(scoreVal);
+                        const isMedianBucket = Math.round(stats.median) === scoreVal;
 
                         return (
                           <div
                             key={scoreVal}
-                            className="flex-1 flex flex-col items-center gap-1 group"
+                            className="flex flex-col items-center gap-1 group"
                             title={`${scoreVal}: ${count} taster${count !== 1 ? 's' : ''} (${percentage.toFixed(0)}%)`}
                           >
-                            {count > 0 && (
+                            <span className="text-[9px] font-mono text-muted-foreground h-3">
+                              {count > 0 ? count : ''}
+                            </span>
+                            <div className="w-full h-16 rounded-md bg-background/80 border border-border/60 flex items-end overflow-hidden">
                               <div
-                                className="w-full bg-primary/60 rounded-t transition-all group-hover:bg-primary"
-                                style={{ height: `${barHeight}%`, minHeight: '4px' }}
+                                className={`w-full rounded-t-sm transition-all ${
+                                  isPeak
+                                    ? 'bg-primary'
+                                    : 'bg-primary/50 group-hover:bg-primary/70'
+                                } ${isMedianBucket ? 'ring-1 ring-amber-400 ring-inset' : ''}`}
+                                style={{ height: count > 0 ? `${Math.max(barHeight, 10)}%` : '0%' }}
                               />
-                            )}
-                            <span className="text-[9px] text-muted-foreground font-mono">{scoreVal}</span>
+                            </div>
+                            <span className={`text-[10px] font-mono ${isMedianBucket ? 'text-amber-700 font-bold' : 'text-muted-foreground'}`}>
+                              {scoreVal}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Percentage text */}
-                    {Object.keys(distribution).length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {Object.entries(distribution)
-                          .map(([val, count]) => `${((count / totalTasters) * 100).toFixed(0)}% gave ${val}`)
-                          .join(' • ')}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-3 text-[11px]">
+                      <span className="px-2 py-1 rounded-full bg-background border border-border text-foreground">
+                        Median {stats.median.toFixed(1)}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-background border border-border text-foreground">
+                        Mean {stats.mean.toFixed(1)}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-background border border-border text-muted-foreground">
+                        Most votes: {stats.peakScores.join(', ')}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      The bars show how many tasters chose each score from 1–9. Consensus still uses the median, while mean shows the average tendency.
+                    </p>
                   </div>
                 );
               })}
@@ -294,12 +367,21 @@ export default function PanelPage() {
                 <div key={submission.tasterId} className="text-xs border-t border-border pt-2 first:border-0 first:pt-0">
                   <p className="font-medium mb-1">{idx + 1}. {submission.tasterName}</p>
                   <div className="grid grid-cols-4 gap-1">
-                    {SCORE_ATTRIBUTES.map(attr => (
-                      <div key={attr.key} className="text-center">
-                        <p className="text-[10px] text-muted-foreground">{attr.emoji}</p>
-                        <p className="font-mono font-bold">{submission.scores[attr.key]}</p>
-                      </div>
-                    ))}
+                    {SCORE_ATTRIBUTES.map(attr => {
+                      const { label: lvl, color: lvlColor } = getAttributeLabel(submission.scores[attr.key]);
+                      return (
+                        <div key={attr.key} className="text-center">
+                          <p className="text-[10px] text-muted-foreground">{attr.emoji}</p>
+                          <span
+                            className="text-[9px] font-medium px-1 py-0.5 rounded inline-block mb-0.5"
+                            style={{ backgroundColor: `${lvlColor}18`, color: lvlColor }}
+                          >
+                            {lvl}
+                          </span>
+                          <p className="font-mono font-bold">{submission.scores[attr.key]}/9</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}

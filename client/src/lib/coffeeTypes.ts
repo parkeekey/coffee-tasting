@@ -111,6 +111,13 @@ export function getScoreColor(score: number): string {
 }
 
 /** Get score label */
+export function getAttributeLabel(score: number): { label: string; color: string } {
+  if (score <= 3) return { label: 'Low',  color: '#c0392b' };
+  if (score <= 6) return { label: 'Med',  color: '#d4860a' };
+  return              { label: 'High', color: '#4a7c59' };
+}
+
+/** Get score label */
 export function getScoreLabel(score: number): string {
   if (score < 70) return 'Below Specialty';
   if (score < 75) return 'Specialty';
