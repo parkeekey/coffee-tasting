@@ -4,7 +4,18 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Plus, Users, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { ChevronLeft, Plus, Users, Trash2, Edit2, BarChart2, UserPlus } from 'lucide-react';
 import {
   PanelSession,
   PROCESS_OPTIONS,
@@ -548,48 +559,91 @@ export default function PanelPage() {
             <p className="text-xs">Create one to start a cupping session</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {sessions.map(session => (
               <div
                 key={session.id}
-                className="bg-card rounded-lg p-3 border border-border flex items-center justify-between"
+                className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-slide-up"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold">{session.sampleIndex}</p>
-                  <p className="text-xs text-muted-foreground">{session.coffeeDetails.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {session.submissions.length} taster{session.submissions.length !== 1 ? 's' : ''}
-                  </p>
+                {/* Card body */}
+                <div className="p-3">
+                  <div className="flex items-start gap-3">
+                    {/* Icon badge */}
+                    <div className="flex-none w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                      <Users size={18} className="text-primary" />
+                    </div>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono-custom font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          {session.sampleIndex}
+                        </span>
+                      </div>
+                      <h3 className="font-display font-semibold text-sm text-foreground truncate mt-0.5">
+                        {session.coffeeDetails.name || 'Unnamed Session'}
+                      </h3>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {session.sessionName || '—'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <span className="font-medium text-foreground">{session.submissions.length}</span> taster{session.submissions.length !== 1 ? 's' : ''}
+                        {session.coffeeDetails.origin ? ` · ${session.coffeeDetails.origin}` : ''}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-1 flex-wrap justify-end">
+
+                {/* Action row */}
+                <div className="flex items-center border-t border-border/50">
                   <button
                     onClick={() => handleJoinSession(session)}
-                    className="px-2 py-1 text-xs bg-secondary text-secondary-foreground rounded hover:opacity-90 transition-opacity"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors"
                   >
+                    <UserPlus size={12} />
                     Join
                   </button>
+                  <div className="w-px h-6 bg-border" />
                   <button
                     onClick={() => handleViewResults(session)}
-                    className="px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors"
                   >
+                    <BarChart2 size={12} />
                     Results
                   </button>
+                  <div className="w-px h-6 bg-border" />
                   <button
                     onClick={() => handleEditSession(session)}
-                    className="px-2 py-1 text-xs bg-muted text-muted-foreground rounded hover:opacity-90 transition-opacity"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors"
                   >
+                    <Edit2 size={12} />
                     Edit
                   </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this session?')) {
-                        handleDeleteSession(session.id);
-                      }
-                    }}
-                    className="p-1 text-xs bg-destructive/20 text-destructive rounded hover:opacity-90 transition-opacity"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="w-px h-6 bg-border" />
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors">
+                        <Trash2 size={12} />
+                        Delete
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          "{session.coffeeDetails.name || session.sampleIndex}" and all {session.submissions.length} taster submission{session.submissions.length !== 1 ? 's' : ''} will be permanently removed.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteSession(session.id)}
+                          className="bg-destructive text-destructive-foreground"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ))}
