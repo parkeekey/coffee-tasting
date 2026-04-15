@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { ChevronLeft, Plus, Users, Trash2, Edit2, BarChart2, UserPlus } from 'lucide-react';
+import { ChevronLeft, Plus, Users, Trash2, Edit2, BarChart2, UserPlus, Download, FileJson, FileSpreadsheet, FileText } from 'lucide-react';
 import {
   PanelSession,
   PROCESS_OPTIONS,
@@ -35,6 +35,7 @@ import {
 import { toast } from 'sonner';
 
 type PanelView = 'list' | 'creator' | 'taster' | 'results';
+type PanelExportFormat = 'csv' | 'json' | 'text';
 
 export default function PanelPage() {
   const [view, setView] = useState<PanelView>('list');
@@ -151,6 +152,102 @@ export default function PanelPage() {
     setView('results');
   };
 
+  const downloadFile = (content: string, filename: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const buildPanelJson = (session: PanelSession) => JSON.stringify(session, null, 2);
+
+  const buildPanelCsv = (session: PanelSession) => {
+    const headers = [
+      'Session ID', 'Sample Index', 'Session Name', 'Coffee Name', 'Origin', 'Process', 'Altitude', 'Roast',
+      'Taster Name', 'Fragrance', 'Aroma', 'Acidity', 'Sweetness', 'Flavor', 'Mouthfeel', 'Aftertaste', 'Overall',
+      'Taster Total', 'Submitted At'
+    ];
+
+    const rows = session.submissions.map(sub => [
+      session.id,
+      session.sampleIndex,
+      session.sessionName,
+      session.coffeeDetails.name,
+      session.coffeeDetails.origin,
+      session.coffeeDetails.process,
+      session.coffeeDetails.altitude,
+      session.coffeeDetails.roastLevel,
+      sub.tasterName,
+      sub.scores.fragrance,
+      sub.scores.aroma,
+      sub.scores.acidity,
+      sub.scores.sweetness,
+      sub.scores.flavor,
+      sub.scores.mouthfeel,
+      sub.scores.aftertaste,
+      sub.scores.overall,
+      calculateTotalScore(sub.scores),
+      new Date(sub.submittedAt).toLocaleString(),
+    ]);
+
+    return [headers.join(','), ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
+  };
+
+  const buildPanelText = (session: PanelSession) => {
+    const consensus = getConsensusScores(session.submissions);
+    const consensusTotal = calculateTotalScore(consensus);
+    const top3 = getTop3Attributes(consensus);
+
+    const lines = [
+      '═══════════════════════════════════',
+      `Panel Session: ${session.sessionName || session.sampleIndex}`,
+      `Sample: ${session.sampleIndex}`,
+      `Coffee: ${session.coffeeDetails.name || 'Unnamed'}`,
+      `Origin: ${session.coffeeDetails.origin || '—'} | Process: ${session.coffeeDetails.process}`,
+      `Altitude: ${session.coffeeDetails.altitude} | Roast: ${session.coffeeDetails.roastLevel}`,
+      `Tasters: ${session.submissions.length}`,
+      '',
+      'CONSENSUS (MEDIAN)',
+      ...SCORE_ATTRIBUTES.map(attr => `  ${attr.emoji} ${attr.label}: ${consensus[attr.key].toFixed(1)}/9`),
+      `  TOTAL: ${consensusTotal.toFixed(1)} / 100`,
+      '',
+      `Top 3: ${top3.map(t => `${SCORE_ATTRIBUTES.find(a => a.key === t.key)?.label} ${t.score.toFixed(1)}`).join(' • ')}`,
+      '',
+      'INDIVIDUAL TASTERS',
+      ...session.submissions.map((sub, i) => `${i + 1}. ${sub.tasterName} — ${calculateTotalScore(sub.scores).toFixed(1)} / 100 (${new Date(sub.submittedAt).toLocaleString()})`),
+    ];
+
+    return lines.join('\n');
+  };
+
+  const handleExportSession = (session: PanelSession, format: PanelExportFormat) => {
+    const safeName = (session.sessionName || session.sampleIndex || 'panel-session')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const date = new Date().toISOString().slice(0, 10);
+
+    if (format === 'json') {
+      downloadFile(buildPanelJson(session), `${safeName}-${date}.json`, 'application/json');
+      toast.success('Panel exported as JSON');
+      return;
+    }
+
+    if (format === 'csv') {
+      downloadFile(buildPanelCsv(session), `${safeName}-${date}.csv`, 'text/csv');
+      toast.success('Panel exported as CSV');
+      return;
+    }
+
+    downloadFile(buildPanelText(session), `${safeName}-${date}.txt`, 'text/plain');
+    toast.success('Panel exported as text report');
+  };
+
   // ===== CONSENSUS BAR CHART HELPERS =====
   const getScoreDistribution = (submissions: PanelSession['submissions'], attrKey: keyof TastingScores) => {
     const scores = submissions.map(s => s.scores[attrKey]);
@@ -227,6 +324,43 @@ export default function PanelPage() {
               <p className="text-xs text-muted-foreground mb-1">Panel Consensus Score</p>
               <p className="text-2xl font-bold text-primary">{consensusTotal}</p>
               <p className="text-xs text-muted-foreground mt-1">/ 100 ({totalTasters} tasters)</p>
+            </div>
+          </div>
+
+          {/* Export Panel Session */}
+          <div className="bg-card rounded-lg p-4 mb-4 border border-border">
+            <div className="flex items-center gap-2 mb-3">
+              <Download size={14} className="text-primary" />
+              <h3 className="font-semibold text-sm">Export This Session</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1"
+                onClick={() => handleExportSession(currentSession, 'csv')}
+              >
+                <FileSpreadsheet size={12} />
+                CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1"
+                onClick={() => handleExportSession(currentSession, 'json')}
+              >
+                <FileJson size={12} />
+                JSON
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1"
+                onClick={() => handleExportSession(currentSession, 'text')}
+              >
+                <FileText size={12} />
+                TEXT
+              </Button>
             </div>
           </div>
 

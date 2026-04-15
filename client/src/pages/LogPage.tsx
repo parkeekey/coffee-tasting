@@ -3,7 +3,7 @@
 // Design: "Specialty Lab" — warm scientific minimalism
 // =============================================================
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -235,6 +235,58 @@ export default function LogPage() {
   const { entries } = useCoffee();
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showPreferenceInsights, setShowPreferenceInsights] = useState(false);
+
+  const preferenceInsights = useMemo(() => {
+    if (entries.length === 0) return null;
+
+    const attrAverages = SCORE_ATTRIBUTES.map(attr => {
+      const avg = entries.reduce((sum, entry) => sum + entry.scores[attr.key], 0) / entries.length;
+      return { ...attr, avg };
+    });
+
+    const overallAttrAvg =
+      attrAverages.reduce((sum, attr) => sum + attr.avg, 0) / attrAverages.length;
+
+    const ranked = [...attrAverages]
+      .map(attr => ({
+        ...attr,
+        delta: attr.avg - overallAttrAvg,
+      }))
+      .sort((a, b) => b.avg - a.avg);
+
+    const topLiked = ranked.slice(0, 3);
+    const lowerScored = [...ranked].reverse().slice(0, 2);
+
+    const getTopCategory = (pick: (entry: CoffeeEntry) => string) => {
+      const buckets: Record<string, { count: number; total: number }> = {};
+      entries.forEach(entry => {
+        const key = pick(entry) || '—';
+        if (!buckets[key]) buckets[key] = { count: 0, total: 0 };
+        buckets[key].count += 1;
+        buckets[key].total += entry.totalScore;
+      });
+
+      return Object.entries(buckets)
+        .map(([key, data]) => ({
+          key,
+          count: data.count,
+          avgScore: data.total / data.count,
+        }))
+        .sort((a, b) => b.avgScore - a.avgScore)[0];
+    };
+
+    const preferredProcess = getTopCategory(entry => entry.process || 'Unknown');
+    const preferredRoast = getTopCategory(entry => entry.roastLevel || 'Unknown');
+
+    return {
+      overallAttrAvg,
+      topLiked,
+      lowerScored,
+      preferredProcess,
+      preferredRoast,
+    };
+  }, [entries]);
 
   const filtered = entries.filter(e => {
     if (showFavoritesOnly && !e.isFavorite) return false;
@@ -322,6 +374,86 @@ export default function LogPage() {
           </div>
         </div>
       )}
+
+      {/* Personal preference insights */}
+      <div className="bg-white border-b border-border px-4 py-3">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+          <button
+            onClick={() => setShowPreferenceInsights(v => !v)}
+            className="w-full flex items-center justify-between gap-2"
+          >
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-amber-800 text-left">
+              Personal Preference (from your log)
+            </h3>
+            <span className="text-[10px] font-medium text-amber-700 flex items-center gap-1">
+              {showPreferenceInsights ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showPreferenceInsights ? 'Hide' : 'Show'}
+            </span>
+          </button>
+
+          {showPreferenceInsights && (
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              {entries.length < 3 && (
+                <div className="rounded-lg border border-amber-200 bg-white px-2.5 py-2">
+                  <p className="text-xs text-amber-900 font-medium">At least try logging 3 coffees first.</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    You currently have {entries.length} {entries.length === 1 ? 'entry' : 'entries'}. Add more logs for meaningful preference insights.
+                  </p>
+                </div>
+              )}
+
+              {entries.length >= 3 && preferenceInsights && (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-amber-700">Bias baseline: {preferenceInsights.overallAttrAvg.toFixed(2)}/9</span>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-medium text-amber-900 mb-1">You tend to score higher on:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {preferenceInsights.topLiked.map(attr => (
+                        <span
+                          key={attr.key}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-300 bg-white text-amber-800"
+                        >
+                          {attr.emoji} {attr.label} {attr.avg.toFixed(2)}/9
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] font-medium text-amber-900 mb-1">You score relatively lower on:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {preferenceInsights.lowerScored.map(attr => (
+                        <span
+                          key={attr.key}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full border border-border bg-white text-muted-foreground"
+                        >
+                          {attr.emoji} {attr.label} {attr.avg.toFixed(2)}/9
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-1 border-t border-amber-200/60 flex flex-wrap gap-2">
+                    {preferenceInsights.preferredProcess && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-border text-foreground">
+                        Favorite process: {preferenceInsights.preferredProcess.key} ({preferenceInsights.preferredProcess.avgScore.toFixed(1)})
+                      </span>
+                    )}
+                    {preferenceInsights.preferredRoast && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-border text-foreground">
+                        Favorite roast: {preferenceInsights.preferredRoast.key} ({preferenceInsights.preferredRoast.avgScore.toFixed(1)})
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Entry list */}
       <div className="flex-1 px-4 py-3 space-y-3">

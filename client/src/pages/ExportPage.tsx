@@ -3,7 +3,7 @@
 // Design: "Specialty Lab" — warm scientific minimalism
 // =============================================================
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, FileText, FileJson, FileSpreadsheet, Copy, Check, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -65,12 +65,51 @@ export default function ExportPage() {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv');
   const [copied, setCopied] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedEntryIds(prev => {
+      const allIds = entries.map(e => e.id);
+      if (allIds.length === 0) return [];
+
+      // First load: select all
+      if (prev.length === 0) return allIds;
+
+      // Keep existing selections that still exist + auto-select new entries
+      const existing = prev.filter(id => allIds.includes(id));
+      const missing = allIds.filter(id => !existing.includes(id));
+      return [...existing, ...missing];
+    });
+  }, [entries]);
+
+  const selectedEntries = useMemo(
+    () => entries.filter(entry => selectedEntryIds.includes(entry.id)),
+    [entries, selectedEntryIds]
+  );
+
+  const selectedCount = selectedEntries.length;
+
+  const toggleEntry = (entryId: string) => {
+    setSelectedEntryIds(prev =>
+      prev.includes(entryId)
+        ? prev.filter(id => id !== entryId)
+        : [...prev, entryId]
+    );
+  };
+
+  const selectAllEntries = () => {
+    setSelectedEntryIds(entries.map(e => e.id));
+  };
+
+  const clearAllEntries = () => {
+    setSelectedEntryIds([]);
+  };
 
   const getContent = (format: ExportFormat): string => {
     switch (format) {
-      case 'csv': return exportToCSV(entries);
-      case 'json': return exportToJSON(entries);
-      case 'text': return exportToText(entries);
+      case 'csv': return exportToCSV(selectedEntries);
+      case 'json': return exportToJSON(selectedEntries);
+      case 'text': return exportToText(selectedEntries);
     }
   };
 
@@ -84,10 +123,14 @@ export default function ExportPage() {
       toast.error('No entries to export. Add some tasting entries first!');
       return;
     }
+    if (selectedEntries.length === 0) {
+      toast.error('No logs selected. Select at least one log to export.');
+      return;
+    }
     const fmt = FORMAT_OPTIONS.find(f => f.id === selectedFormat)!;
     const content = getContent(selectedFormat);
     downloadFile(content, getFilename(selectedFormat), fmt.mime);
-    toast.success(`Exported ${entries.length} entries as ${fmt.label}`, {
+    toast.success(`Exported ${selectedEntries.length} ${selectedEntries.length === 1 ? 'entry' : 'entries'} as ${fmt.label}`, {
       description: getFilename(selectedFormat),
     });
   };
@@ -97,6 +140,10 @@ export default function ExportPage() {
       toast.error('No entries to copy.');
       return;
     }
+    if (selectedEntries.length === 0) {
+      toast.error('No logs selected. Select at least one log to copy.');
+      return;
+    }
     const content = getContent(selectedFormat);
     await navigator.clipboard.writeText(content);
     setCopied(true);
@@ -104,7 +151,7 @@ export default function ExportPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const previewContent = entries.length > 0 ? getContent(selectedFormat) : '';
+  const previewContent = selectedEntries.length > 0 ? getContent(selectedFormat) : '';
   const previewLines = previewContent.split('\n').slice(0, 20);
 
   return (
@@ -209,6 +256,40 @@ export default function ExportPage() {
         </div>
       </div>
 
+      {/* Log selection */}
+      {entries.length > 0 && (
+        <div className="bg-white border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+              Select Logs
+            </h2>
+            <span className="text-[11px] text-muted-foreground">
+              {selectedCount} / {entries.length} selected
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={selectAllEntries}
+              className="h-8 text-xs"
+              disabled={selectedCount === entries.length}
+            >
+              Select All
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearAllEntries}
+              className="h-8 text-xs"
+              disabled={selectedCount === 0}
+            >
+              Clear All
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Preview */}
       {entries.length > 0 && (
         <div className="bg-white border-b border-border px-4 py-3">
@@ -216,17 +297,21 @@ export default function ExportPage() {
             onClick={() => setPreviewOpen(v => !v)}
             className="w-full flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-widest"
           >
-            <span>Preview</span>
+            <span>Preview ({selectedCount} selected)</span>
             <span className="normal-case font-normal text-primary">
               {previewOpen ? 'Hide' : 'Show'}
             </span>
           </button>
           {previewOpen && (
             <div className="mt-2 bg-muted/50 rounded-lg p-3 overflow-x-auto animate-fade-slide-up">
-              <pre className="text-[10px] text-muted-foreground font-mono-custom whitespace-pre leading-relaxed">
-                {previewLines.join('\n')}
-                {previewContent.split('\n').length > 20 && '\n... (truncated)'}
-              </pre>
+              {selectedCount === 0 ? (
+                <p className="text-xs text-muted-foreground">Select at least one log to preview export content.</p>
+              ) : (
+                <pre className="text-[10px] text-muted-foreground font-mono-custom whitespace-pre leading-relaxed">
+                  {previewLines.join('\n')}
+                  {previewContent.split('\n').length > 20 && '\n... (truncated)'}
+                </pre>
+              )}
             </div>
           )}
         </div>
@@ -238,11 +323,29 @@ export default function ExportPage() {
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
             Entries to Export
           </h2>
-          <div className="space-y-1.5">
-            {entries.slice(0, 8).map(entry => {
+          <div className="space-y-1.5 max-h-72 overflow-auto pr-1">
+            {entries.map(entry => {
               const color = getScoreHex(entry.totalScore);
+              const isSelected = selectedEntryIds.includes(entry.id);
               return (
-                <div key={entry.id} className="flex items-center gap-2 py-1.5 border-b border-border/50 last:border-0">
+                <button
+                  key={entry.id}
+                  onClick={() => toggleEntry(entry.id)}
+                  className={`w-full text-left flex items-center gap-2 py-1.5 px-1 rounded-lg border transition-colors ${
+                    isSelected
+                      ? 'bg-primary/5 border-primary/20'
+                      : 'border-transparent hover:bg-muted/40'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded border flex items-center justify-center flex-none ${
+                      isSelected
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-border bg-white'
+                    }`}
+                  >
+                    {isSelected && <Check size={10} />}
+                  </span>
                   <span className="text-[10px] font-mono-custom text-muted-foreground w-10 flex-none">
                     {entry.sampleIndex}
                   </span>
@@ -256,14 +359,9 @@ export default function ExportPage() {
                   >
                     {entry.totalScore.toFixed(1)}
                   </span>
-                </div>
+                </button>
               );
             })}
-            {entries.length > 8 && (
-              <p className="text-xs text-muted-foreground text-center py-1">
-                +{entries.length - 8} more entries
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -292,7 +390,7 @@ export default function ExportPage() {
           size="sm"
           onClick={handleCopy}
           className="flex-none gap-1.5"
-          disabled={entries.length === 0}
+          disabled={entries.length === 0 || selectedCount === 0}
         >
           {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
           Copy
@@ -302,10 +400,10 @@ export default function ExportPage() {
           onClick={handleExport}
           className="flex-1 gap-1.5 font-semibold"
           style={{ background: 'oklch(0.38 0.08 35)', color: 'white' }}
-          disabled={entries.length === 0}
+          disabled={entries.length === 0 || selectedCount === 0}
         >
           <Download size={14} />
-          Download {FORMAT_OPTIONS.find(f => f.id === selectedFormat)?.ext.toUpperCase()}
+          Download {FORMAT_OPTIONS.find(f => f.id === selectedFormat)?.ext.toUpperCase()} ({selectedCount})
         </Button>
       </div>
       </div>
