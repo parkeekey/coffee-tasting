@@ -6,6 +6,13 @@
 import { Slider } from '@/components/ui/slider';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AcidityDescriptorSelector } from './AcidityDescriptorSelector';
+import { IntensityDescriptorSelector } from './IntensityDescriptorSelector';
+import { MouthfeelDescriptorSelector } from './MouthfeelDescriptorSelector';
+import { AftertasteDescriptorSelector } from './AftertasteDescriptorSelector';
+import { OverallDescriptorSelector } from './OverallDescriptorSelector';
+import { SweetnessDescriptorSelector } from './SweetnessDescriptorSelector';
+import { AromaDescriptorSelector } from './AromaDescriptorSelector';
 
 interface TastingSliderWithFocusProps {
   emoji: string;
@@ -15,6 +22,24 @@ interface TastingSliderWithFocusProps {
   onChange: (value: number) => void;
   isFocused: boolean;
   onFocusToggle: () => void;
+  aromaDescriptors?: string[];  // Only for aroma attribute
+  onAromaDescriptorsChange?: (descriptors: string[]) => void;
+  sweetnessDescriptors?: string[];  // Only for sweetness attribute
+  sweetnessDetailDescriptors?: string[];  // Only for sweetness attribute
+  onSweetnessDescriptorsChange?: (descriptors: string[]) => void;
+  onSweetnessDetailDescriptorsChange?: (descriptors: string[]) => void;
+  acidityDescriptors?: string[];  // Only for acidity attribute
+  acidityTypeDescriptors?: string[];  // Auto-inferred for acidity attribute
+  onAcidityDescriptorsChange?: (descriptors: string[]) => void;
+  onAcidityTypeDescriptorsChange?: (types: string[]) => void;
+  intensityDescriptors?: string[];  // Only for acidity attribute
+  onIntensityDescriptorsChange?: (descriptors: string[]) => void;
+  mouthfeelDescriptors?: string[];  // Only for mouthfeel attribute
+  onMouthfeelDescriptorsChange?: (descriptors: string[]) => void;
+  aftertasteDescriptors?: string[];  // Only for aftertaste attribute
+  onAftertasteDescriptorsChange?: (descriptors: string[]) => void;
+  overallDescriptors?: string[];  // Only for overall attribute
+  onOverallDescriptorsChange?: (descriptors: string[]) => void;
 }
 
 const VALUE_LABELS: Record<number, string> = {
@@ -50,12 +75,36 @@ export function TastingSliderWithFocus({
   onChange,
   isFocused,
   onFocusToggle,
+  aromaDescriptors,
+  onAromaDescriptorsChange,
+  sweetnessDescriptors,
+  sweetnessDetailDescriptors,
+  onSweetnessDescriptorsChange,
+  onSweetnessDetailDescriptorsChange,
+  acidityDescriptors,
+  acidityTypeDescriptors,
+  onAcidityDescriptorsChange,
+  onAcidityTypeDescriptorsChange,
+  intensityDescriptors,
+  onIntensityDescriptorsChange,
+  mouthfeelDescriptors,
+  onMouthfeelDescriptorsChange,
+  aftertasteDescriptors,
+  onAftertasteDescriptorsChange,
+  overallDescriptors,
+  onOverallDescriptorsChange,
 }: TastingSliderWithFocusProps) {
   const clamp = (v: number) => Math.max(1, Math.min(9, v));
   const color = getValueColor(value);
   // Get the attribute key from label (lowercase)
   const attributeKey = label.toLowerCase().replace(/\s+/g, '');
   const attributeColor = ATTRIBUTE_COLORS[attributeKey] || '#d4860a';
+  const isSweetness = attributeKey === 'sweetness';
+  const isAroma = attributeKey === 'aroma';
+  const isAcidity = attributeKey === 'acidity';
+  const isMouthfeel = attributeKey === 'mouthfeel';
+  const isAftertaste = attributeKey === 'aftertaste';
+  const isOverall = attributeKey === 'overall';
 
   return (
     <div
@@ -138,6 +187,66 @@ export function TastingSliderWithFocus({
         </span>
         <span className="text-[10px] text-muted-foreground">9</span>
       </div>
+
+      {/* Aroma Descriptor Selector — Only show for aroma */}
+      {isAroma && onAromaDescriptorsChange && (
+        <AromaDescriptorSelector
+          selected={aromaDescriptors || []}
+          onChange={onAromaDescriptorsChange}
+        />
+      )}
+
+      {/* Sweetness Descriptor Selector — Only show for sweetness */}
+      {isSweetness && onSweetnessDescriptorsChange && onSweetnessDetailDescriptorsChange && (
+        <SweetnessDescriptorSelector
+          selectedFamilies={sweetnessDescriptors || []}
+          selectedDetails={sweetnessDetailDescriptors || []}
+          onFamiliesChange={onSweetnessDescriptorsChange}
+          onDetailsChange={onSweetnessDetailDescriptorsChange}
+        />
+      )}
+
+      {/* Acidity Descriptor Selector — Only show for acidity */}
+      {isAcidity && onAcidityDescriptorsChange && (
+        <AcidityDescriptorSelector
+          selected={acidityDescriptors || []}
+          autoSelectedTypes={acidityTypeDescriptors || []}
+          onChange={onAcidityDescriptorsChange}
+          onAutoTypesChange={onAcidityTypeDescriptorsChange}
+        />
+      )}
+
+      {/* Intensity Descriptor Selector — Only show for acidity */}
+      {isAcidity && onIntensityDescriptorsChange && (
+        <IntensityDescriptorSelector
+          selected={intensityDescriptors || []}
+          onChange={onIntensityDescriptorsChange}
+        />
+      )}
+
+      {/* Mouthfeel Descriptor Selector — Only show for mouthfeel */}
+      {isMouthfeel && onMouthfeelDescriptorsChange && (
+        <MouthfeelDescriptorSelector
+          selected={mouthfeelDescriptors || []}
+          onChange={onMouthfeelDescriptorsChange}
+        />
+      )}
+
+      {/* Aftertaste Descriptor Selector — Only show for aftertaste */}
+      {isAftertaste && onAftertasteDescriptorsChange && (
+        <AftertasteDescriptorSelector
+          selected={aftertasteDescriptors || []}
+          onChange={onAftertasteDescriptorsChange}
+        />
+      )}
+
+      {/* Overall Descriptor Selector — Only show for overall */}
+      {isOverall && onOverallDescriptorsChange && (
+        <OverallDescriptorSelector
+          selected={overallDescriptors || []}
+          onChange={onOverallDescriptorsChange}
+        />
+      )}
     </div>
   );
 }

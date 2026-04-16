@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Minus, RotateCcw, Save, EyeOff, Eye, Crosshair } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -55,6 +56,7 @@ function GestureButton({
   onTap,
   onDecrease,
   onReset,
+  isFocused,
 }: {
   label: string;
   hint?: string;
@@ -63,30 +65,26 @@ function GestureButton({
   onTap: () => void;
   onDecrease: () => void;
   onReset: () => void;
+  isFocused?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-2.5 shadow-sm">
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div>
+    <div className={`rounded-xl border ${isFocused ? 'border-primary shadow-md bg-primary/5' : 'border-border bg-white'} p-2.5 shadow-sm transition-colors`}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1">
           <p className="text-xs font-semibold text-foreground">{emoji} {label}</p>
           {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
         </div>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-          tap === 0 ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
-        }`}>
-          {levelLabel(tap)}
-        </span>
       </div>
 
       <button
         onClick={onTap}
-        className={`w-full rounded-lg py-3 text-sm font-semibold active:scale-[0.99] transition-all ${
+        className={`w-full rounded-lg py-2 text-sm font-semibold active:scale-[0.99] transition-all ${
           tap === 0
             ? 'border border-dashed border-border bg-muted/30 text-muted-foreground hover:bg-muted/50'
             : 'border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10'
         }`}
       >
-        {tap === 0 ? 'Tap to start' : `Tap to cycle · ${tap} tap${tap > 1 ? 's' : ''} · ${TAP_TO_SCORE[tap]}/9`}
+        {tap === 0 ? 'None' : levelLabel(tap)} · {TAP_TO_SCORE[tap]}/9
       </button>
 
       <div className="grid grid-cols-3 gap-1 mt-1.5">
@@ -131,6 +129,19 @@ export default function TastePadPage() {
   const [notes, setNotes] = useState('');
 
   const [taps, setTaps] = useState<Record<PadScoreKey, TapLevel>>(INITIAL_TAPS);
+  const [focusedAttributes, setFocusedAttributes] = useState<Set<PadScoreKey>>(new Set());
+
+  const toggleFocusAttribute = (attr: PadScoreKey) => {
+    const updated = new Set(focusedAttributes);
+    if (updated.has(attr)) {
+      updated.delete(attr);
+    } else {
+      updated.add(attr);
+    }
+    setFocusedAttributes(updated);
+  };
+
+  const isFocused = (attr: PadScoreKey) => focusedAttributes.has(attr);
 
   const setTap = (key: PadScoreKey, next: TapLevel) => {
     setTaps(prev => ({ ...prev, [key]: next }));
@@ -215,12 +226,32 @@ export default function TastePadPage() {
     const entry: CoffeeEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       sampleIndex: sampleCode.trim() || `S-${String(nextIndex).padStart(2, '0')}`,
+      entryMode: 'pad',
+      isBlindMode: blindMode,
       name: sampleName.trim(),
       origin: blindMode ? '' : origin.trim(),
       process: blindMode ? PROCESS_OPTIONS[0] : process,
       altitude: blindMode ? ALTITUDE_OPTIONS[2] : altitude,
       roastLevel: blindMode ? ROAST_OPTIONS[2] : roastLevel,
       roaster: blindMode ? '' : roaster.trim(),
+      brewMethod: '',
+      brewDose: '',
+      brewRatio: '',
+      brewWaterIn: '',
+      brewYield: '',
+      brewTemp: '',
+      brewTime: '',
+      brewTDS: '',
+      brewWater: '',
+      brewGrinder: '',
+      brewGrindLevel: '',
+      brewGrindClicks: '',
+      brewGrindMicrons: '',
+      brewGrindSize: '',
+      brewPours: [],
+      brewRecipeNotes: '',
+      tastingLiquidMl: '',
+      tastingDose: '',
       notes: [
         blindMode ? '[TastePad][Blind Mode]' : '[TastePad]',
         `Acidity↔Sweetness: ${mappedScores.acidity}/${mappedScores.sweetness}`,
@@ -233,6 +264,15 @@ export default function TastePadPage() {
       totalScore: totalScore ?? calculateTotalScore(mappedScores),
       isFavorite: false,
       focusedAttributes: [],
+      aromaDescriptors: [],
+      sweetnessDescriptors: [],
+      sweetnessDetailDescriptors: [],
+      acidityDescriptors: [],
+      acidityTypeDescriptors: [],
+      intensityDescriptors: [],
+      mouthfeelDescriptors: [],
+      aftertasteDescriptors: [],
+      overallDescriptors: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -281,6 +321,21 @@ export default function TastePadPage() {
               {blindMode ? 'Blind ON' : 'Blind OFF'}
             </span>
           </button>
+        </div>
+
+        <div className="mt-2 rounded-lg border border-border p-2.5">
+          <p className="text-xs font-semibold text-foreground mb-2">Focus Highlight</p>
+          <div className="grid grid-cols-4 gap-2">
+            {(['fragrance', 'aroma', 'acidity', 'sweetness', 'mouthfeel', 'aftertaste', 'flavor', 'overall'] as PadScoreKey[]).map((attr) => (
+              <label key={attr} className="flex items-center gap-2 cursor-pointer text-xs">
+                <Checkbox
+                  checked={isFocused(attr)}
+                  onCheckedChange={() => toggleFocusAttribute(attr)}
+                />
+                <span className="capitalize">{attr}</span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 mt-3">
@@ -350,8 +405,8 @@ export default function TastePadPage() {
 
         {/* Top row */}
         <div className="grid grid-cols-2 gap-2">
-          <GestureButton label="Fragrance" hint="Top row" emoji="🌸" tap={taps.fragrance} onTap={() => cycleTap('fragrance')} onDecrease={() => decrease('fragrance')} onReset={() => resetOne('fragrance')} />
-          <GestureButton label="Aroma" hint="Top row" emoji="👃" tap={taps.aroma} onTap={() => cycleTap('aroma')} onDecrease={() => decrease('aroma')} onReset={() => resetOne('aroma')} />
+          <GestureButton label="Fragrance" hint="Top row" emoji="🌸" tap={taps.fragrance} onTap={() => cycleTap('fragrance')} onDecrease={() => decrease('fragrance')} onReset={() => resetOne('fragrance')} isFocused={isFocused('fragrance')} />
+          <GestureButton label="Aroma" hint="Top row" emoji="👃" tap={taps.aroma} onTap={() => cycleTap('aroma')} onDecrease={() => decrease('aroma')} onReset={() => resetOne('aroma')} isFocused={isFocused('aroma')} />
         </div>
 
         {/* Cross map */}
@@ -364,30 +419,50 @@ export default function TastePadPage() {
           <div className="relative w-full max-w-[390px] h-[280px] mx-auto">
             <button
               onClick={() => cycleTap('mouthfeel')}
-              className="absolute left-1/2 top-0 -translate-x-1/2 w-32 h-12 rounded-xl border border-border bg-white text-xs font-semibold shadow-sm active:scale-[0.99] z-10"
+              className={`absolute left-1/2 top-0 -translate-x-1/2 w-32 h-12 rounded-xl border text-xs font-semibold shadow-sm active:scale-[0.99] z-10 transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                isFocused('mouthfeel')
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-border'
+              }`}
             >
-              ☕ Mouthfeel · {TAP_TO_SCORE[taps.mouthfeel]}/9
+              <span>☕ Mouthfeel</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.mouthfeel]}/9 {levelLabel(taps.mouthfeel)}</span>
             </button>
 
             <button
               onClick={() => cycleTap('aftertaste')}
-              className="absolute left-1/2 bottom-0 -translate-x-1/2 w-32 h-12 rounded-xl border border-border bg-white text-xs font-semibold shadow-sm active:scale-[0.99] z-10"
+              className={`absolute left-1/2 bottom-0 -translate-x-1/2 w-32 h-12 rounded-xl border text-xs font-semibold shadow-sm active:scale-[0.99] z-10 transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                isFocused('aftertaste')
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-border'
+              }`}
             >
-              ✨ Aftertaste · {TAP_TO_SCORE[taps.aftertaste]}/9
+              <span>✨ Aftertaste</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.aftertaste]}/9 {levelLabel(taps.aftertaste)}</span>
             </button>
 
             <button
               onClick={() => cycleTap('acidity')}
-              className="absolute left-1 top-1/2 -translate-y-1/2 w-28 h-12 rounded-xl border border-border bg-white text-xs font-semibold shadow-sm active:scale-[0.99] z-10"
+              className={`absolute left-1 top-1/2 -translate-y-1/2 w-28 h-12 rounded-xl border text-xs font-semibold shadow-sm active:scale-[0.99] z-10 transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                isFocused('acidity')
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-border'
+              }`}
             >
-              🍋 Acidity · {TAP_TO_SCORE[taps.acidity]}/9
+              <span>🍋 Acidity</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.acidity]}/9 {levelLabel(taps.acidity)}</span>
             </button>
 
             <button
               onClick={() => cycleTap('sweetness')}
-              className="absolute right-1 top-1/2 -translate-y-1/2 w-28 h-12 rounded-xl border border-border bg-white text-xs font-semibold shadow-sm active:scale-[0.99] z-10"
+              className={`absolute right-1 top-1/2 -translate-y-1/2 w-28 h-12 rounded-xl border text-xs font-semibold shadow-sm active:scale-[0.99] z-10 transition-colors flex flex-col items-center justify-center gap-0.5 ${
+                isFocused('sweetness')
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-border'
+              }`}
             >
-              🍬 Sweetness · {TAP_TO_SCORE[taps.sweetness]}/9
+              <span>🍬 Sweetness</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.sweetness]}/9 {levelLabel(taps.sweetness)}</span>
             </button>
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[140px] h-[140px] rounded-xl bg-muted/40 border border-border overflow-hidden z-0">
@@ -430,8 +505,8 @@ export default function TastePadPage() {
 
         {/* Bottom row */}
         <div className="grid grid-cols-2 gap-2">
-          <GestureButton label="Intensity" hint="Bottom row · maps to Flavor" emoji="⚡" tap={taps.flavor} onTap={() => cycleTap('flavor')} onDecrease={() => decrease('flavor')} onReset={() => resetOne('flavor')} />
-          <GestureButton label="Clarity" hint="Bottom row · maps to Overall" emoji="🫧" tap={taps.overall} onTap={() => cycleTap('overall')} onDecrease={() => decrease('overall')} onReset={() => resetOne('overall')} />
+          <GestureButton label="Intensity" hint="Bottom row · maps to Flavor" emoji="⚡" tap={taps.flavor} onTap={() => cycleTap('flavor')} onDecrease={() => decrease('flavor')} onReset={() => resetOne('flavor')} isFocused={isFocused('flavor')} />
+          <GestureButton label="Clarity" hint="Bottom row · maps to Overall" emoji="🫧" tap={taps.overall} onTap={() => cycleTap('overall')} onDecrease={() => decrease('overall')} onReset={() => resetOne('overall')} isFocused={isFocused('overall')} />
         </div>
       </div>
 

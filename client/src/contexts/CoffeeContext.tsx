@@ -9,6 +9,7 @@ import {
   TastingScores,
   calculateTotalScore,
   createEmptyEntry,
+  inferAcidityTypes,
   loadEntries,
   saveEntries,
 } from '@/lib/coffeeTypes';
@@ -28,6 +29,16 @@ interface CoffeeContextValue {
   setDraft: React.Dispatch<React.SetStateAction<CoffeeEntry>>;
   updateDraftScore: (key: keyof TastingScores, value: number) => void;
   updateDraftField: (key: keyof Omit<CoffeeEntry, 'scores' | 'id' | 'createdAt' | 'updatedAt' | 'totalScore' | 'focusedAttributes'>, value: string | boolean) => void;
+  updateDraftAromaDescriptors: (descriptors: string[]) => void;
+  updateDraftBrewPours: (pours: import('@/lib/coffeeTypes').BrewPour[]) => void;
+  updateDraftSweetnessDescriptors: (descriptors: string[]) => void;
+  updateDraftSweetnessDetailDescriptors: (descriptors: string[]) => void;
+  updateDraftAcidityDescriptors: (descriptors: string[]) => void;
+  updateDraftAcidityTypeDescriptors: (descriptors: string[]) => void;
+  updateDraftIntensityDescriptors: (descriptors: string[]) => void;
+  updateDraftMouthfeelDescriptors: (descriptors: string[]) => void;
+  updateDraftAftertasteDescriptors: (descriptors: string[]) => void;
+  updateDraftOverallDescriptors: (descriptors: string[]) => void;
   toggleFocusedAttribute: (key: keyof TastingScores) => void;
   saveDraft: () => void;
   resetDraft: () => void;
@@ -103,6 +114,50 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
     setDraft(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  const updateDraftSweetnessDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, sweetnessDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftAromaDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, aromaDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftBrewPours = useCallback((pours: import('@/lib/coffeeTypes').BrewPour[]) => {
+    setDraft(prev => ({ ...prev, brewPours: pours }));
+  }, []);
+
+  const updateDraftSweetnessDetailDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, sweetnessDetailDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftAcidityDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({
+      ...prev,
+      acidityDescriptors: descriptors,
+      acidityTypeDescriptors: inferAcidityTypes(descriptors),
+    }));
+  }, []);
+
+  const updateDraftAcidityTypeDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, acidityTypeDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftIntensityDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, intensityDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftMouthfeelDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, mouthfeelDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftAftertasteDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, aftertasteDescriptors: descriptors }));
+  }, []);
+
+  const updateDraftOverallDescriptors = useCallback((descriptors: string[]) => {
+    setDraft(prev => ({ ...prev, overallDescriptors: descriptors }));
+  }, []);
+
   const saveDraft = useCallback(() => {
     const now = new Date().toISOString();
     if (isEditingExisting) {
@@ -140,7 +195,7 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   return (
     <CoffeeContext.Provider value={{
       entries, addEntry, updateEntry, deleteEntry, toggleFavorite,
-      draft, setDraft, updateDraftScore, updateDraftField,
+      draft, setDraft, updateDraftScore, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors,
       toggleFocusedAttribute,
       saveDraft, resetDraft, editEntry, isEditingExisting,
       activeTab, setActiveTab,

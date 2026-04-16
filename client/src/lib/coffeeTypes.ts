@@ -1,26 +1,9 @@
 // =============================================================
 // Coffee Affective Tasting — Data Types & Storage
-// SCA-style scoring: each attribute 1-9, base 36 + sum = total
-// Min total: 36 + 7*1 + 8 = 51... actually: base 36 + 7 scores
-// Formula: 36 + fragrance + aroma + acidity + sweetness +
-//          flavor + mouthfeel + aftertaste + overall
-// Min: 36 + 8*1 = 44... Let's use the user's spec:
-// All 1s = 55, all 9s = 100
-// So: score = 47 + sum(8 attributes) where each is 1-9
-// 47 + 8 = 55 ✓, 47 + 72 = 119... that's too high
-// Let's recalculate: 8 attributes, each 1-9
-// All 1s = 55: base + 8 = 55 → base = 47
-// All 9s = 100: base + 72 = 119... doesn't work
-// User says: all 1s = 55, all 9s = 100
-// So range = 100 - 55 = 45, attribute range = 8 * (9-1) = 64
-// Score = 55 + (sum - 8) * (45/64)
-// Or simpler: use weighted formula
-// Actually re-reading: "total calculation score if all are 1 is 55 lowest and 100 is highest"
-// 8 attributes (fragrance, aroma, acidity, sweetness, flavor, mouthfeel, aftertaste, overall)
-// Linear mapping: score = 55 + (sum(attrs) - 8) / (72 - 8) * (100 - 55)
-// = 55 + (sum - 8) / 64 * 45
-// At all 1s: 55 + 0 = 55 ✓
-// At all 9s: 55 + 64/64 * 45 = 55 + 45 = 100 ✓
+// Affective (personal preference) scoring system
+// Each attribute rated 1-9 based on personal likeability
+// All 1s = 55 (dislike), all 9s = 100 (extraordinary/love it)
+// Formula: score = 55 + (sum - 8) / 64 * 45
 // =============================================================
 
 export type ProcessMethod = 
@@ -44,20 +27,62 @@ export interface TastingScores {
   overall: number;     // 🌟
 }
 
+export type EntryMode = 'tasting' | 'brewing' | 'pad';
+
+export interface BrewPour {
+  id: number;
+  percent: number;     // cumulative target % of total water (0→100)
+  timeStart: string;   // e.g. "0:00"
+  timeEnd: string;     // e.g. "0:30"
+  flowRate: string;    // G/s observation note
+  action?: string;     // action note (e.g. swirl, stir, wait)
+}
+
 export interface CoffeeEntry {
   id: string;
   sampleIndex: string;       // e.g. "S-01"
+  entryMode: EntryMode;
+  isBlindMode: boolean;
   name: string;
   origin: string;
   process: ProcessMethod | string;
   altitude: Altitude | string;
   roastLevel: RoastLevel | string;
   roaster: string;
+  // Brew recipe
+  brewMethod: string;
+  brewDose: string;          // coffee dose in grams
+  brewRatio: string;         // e.g. "1:15"
+  brewWaterIn: string;       // auto-calc: dose × ratio multiplier
+  brewYield: string;         // water out / actual yield
+  brewTemp: string;
+  brewTime: string;          // total brew time
+  brewTDS: string;           // TDS measurement result
+  brewWater: string;         // water recipe / TDS water used
+  brewGrinder: string;       // grinder name
+  brewGrindLevel: string;    // grind level description
+  brewGrindClicks: string;   // clicks
+  brewGrindMicrons: string;  // µm
+  brewGrindSize: string;     // additional grind note
+  brewPours: BrewPour[];     // pour planner rows
+  brewRecipeNotes: string;
+  // Tasting mode EY inputs
+  tastingLiquidMl: string;   // brewed coffee volume (ml) for EY calc in tasting mode
+  tastingDose: string;       // dose (g) for EY calc in tasting mode
   notes: string;             // flavor notes / descriptors
   scores: TastingScores;
   totalScore: number;
   isFavorite: boolean;
   focusedAttributes: (keyof TastingScores)[];  // e.g. ['acidity', 'mouthfeel']
+  aromaDescriptors: string[];  // selected optional aroma standard tags
+  sweetnessDescriptors: string[];  // selected sweetness family tags
+  sweetnessDetailDescriptors: string[];  // selected optional sweetness detail tags
+  acidityDescriptors: string[];  // selected acid types (e.g. ['Citric', 'Malic'])
+  acidityTypeDescriptors: string[];  // auto inferred acid types from selected acidity flavors
+  intensityDescriptors: string[];  // selected intensity descriptors (e.g. ['💫 Bright', '🌫️ Flat'])
+  mouthfeelDescriptors: string[];  // selected mouthfeel descriptors
+  aftertasteDescriptors: string[];  // selected aftertaste length descriptors
+  overallDescriptors: string[];  // selected overall profile descriptors
   createdAt: string;         // ISO date string
   updatedAt: string;
 }
@@ -68,14 +93,14 @@ export const SCORE_ATTRIBUTES: Array<{
   label: string;
   description: string;
 }> = [
-  { key: 'fragrance', emoji: '🌸', label: 'Fragrance', description: 'Dry grounds aroma' },
-  { key: 'aroma',     emoji: '👃', label: 'Aroma',     description: 'Wet/brewed aroma' },
-  { key: 'acidity',   emoji: '🍋', label: 'Acidity',   description: 'Brightness & liveliness' },
-  { key: 'sweetness', emoji: '🍬', label: 'Sweetness', description: 'Natural sweetness' },
-  { key: 'flavor',    emoji: '👅', label: 'Flavor',    description: 'Taste complexity' },
-  { key: 'mouthfeel', emoji: '☕', label: 'Mouthfeel', description: 'Body & texture' },
-  { key: 'aftertaste',emoji: '✨', label: 'Aftertaste', description: 'Finish & lingering' },
-  { key: 'overall',   emoji: '🌟', label: 'Overall',   description: 'Holistic impression' },
+  { key: 'fragrance', emoji: '🌸', label: 'Fragrance', description: 'How much I like the aroma' },
+  { key: 'aroma',     emoji: '👃', label: 'Aroma',     description: 'My preference for the brewed aroma' },
+  { key: 'acidity',   emoji: '🍋', label: 'Acidity',   description: 'How much I enjoy the brightness' },
+  { key: 'sweetness', emoji: '🍬', label: 'Sweetness', description: 'My liking of sweetness' },
+  { key: 'flavor',    emoji: '👅', label: 'Flavor',    description: 'How much I like the taste' },
+  { key: 'mouthfeel', emoji: '☕', label: 'Mouthfeel', description: 'My preference for body & texture' },
+  { key: 'aftertaste',emoji: '✨', label: 'Aftertaste', description: 'How much I enjoy the finish' },
+  { key: 'overall',   emoji: '🌟', label: 'Overall',   description: 'My overall liking' },
 ];
 
 export const PROCESS_OPTIONS: ProcessMethod[] = [
@@ -90,6 +115,115 @@ export const ROAST_OPTIONS: RoastLevel[] = [
 export const ALTITUDE_OPTIONS: Altitude[] = [
   '<1000m', '1000-1200m', '1200-1500m', '1500-1800m', '>1800m'
 ];
+
+// Aroma Descriptors — isolated optional standard tags (11)
+export const AROMA_DESCRIPTORS = [
+  '🌸 Floral',
+  '🍏 Fruity',
+  '🍓 Berry',
+  '🍑 Dried Fruit',
+  '🍋 Citrus Fruit',
+  '🍋 Sour',
+  '🍷 Fermented',
+  '🥜 Nutty',
+  '🍫 Cocoa',
+  '🍯 Sweet',
+  '🍦 Vanilla',
+] as const;
+
+// Acidity Descriptors — acid-type-first taxonomy with flavor tags under each type
+export const ACIDITY_DESCRIPTORS = {
+  '🍋 Citric Acid': ['Lemon', 'Lime', 'Orange', 'Grapefruit', 'Tropical', 'Tangy', 'Tart'],
+  '🍏 Malic Acid': ['Apple', 'Pear', 'Green', 'Blueberry', 'Strawberry', 'Raspberry'],
+  '🍇 Tartaric Acid': ['Grape', 'Raisin', 'Fig', 'Prune', 'Wine-like'],
+  '💧 Phosphoric Acid': ['Bright', 'Clean', 'Mineral', 'Crisp', 'Cola'],
+  '☕ Quinic Acid': ['Bitter', 'Dry', 'Astringent', 'Roasty', 'Woody'],
+} as const;
+
+export type AcidityTypeGroup = keyof typeof ACIDITY_DESCRIPTORS;
+/** @deprecated use AcidityTypeGroup */
+export type AcidityFlavorFamily = AcidityTypeGroup;
+
+/** Infer which acid types are active based on selected flavor descriptors */
+export function inferAcidityTypes(descriptors: string[]): string[] {
+  if (descriptors.length === 0) return [];
+  const activeTypes = new Set<string>();
+  for (const [acidType, flavors] of Object.entries(ACIDITY_DESCRIPTORS)) {
+    if ((flavors as readonly string[]).some((f) => descriptors.includes(f))) {
+      activeTypes.add(acidType);
+    }
+  }
+  return Array.from(activeTypes);
+}
+
+// Intensity Descriptors — optional tags for intensity attribute
+export const INTENSITY_DESCRIPTORS = {
+  'low': ['🌫️ Flat', '🎀 Soft'],
+  'medium': ['🍯 Mellow', '🌶️ Tangy'],
+  'high': ['💫 Bright', '✨ Crisp', '🔪 Sharp'],
+} as const;
+
+export type IntensityLevel = keyof typeof INTENSITY_DESCRIPTORS;
+
+// Mouthfeel Descriptors — optional tags for mouthfeel attribute
+export const MOUTHFEEL_DESCRIPTORS = {
+  Body: {
+    Weight: ['💧 Light', '⚖️ Medium', '🪨 Heavy', '🧱 Full'],
+    Viscosity: ['💦 Watery', '🎀 Thin', '🧃 Juicy', '🌊 Thick', '🧴 Sticky', '🛡️ Coating'],
+  },
+  Texture: {
+    Smooth: ['🧵 Velvetty', '🥛 Creamy', '⭕ Round', '🍯 Syrupy', '🛢️ Oily', '✨ Silky'],
+    Rought: ['🪵 Coarsed', '⚠️ Harsh', '🧱 Hard'],
+    Particle: ['🌫️ Powdery', '🌾 Grainy', '🪨 Gritty'],
+  },
+} as const;
+
+export type MouthfeelPrimaryType = keyof typeof MOUTHFEEL_DESCRIPTORS;
+export type MouthfeelSubtype<T extends MouthfeelPrimaryType = MouthfeelPrimaryType> = keyof typeof MOUTHFEEL_DESCRIPTORS[T];
+
+// Aftertaste Descriptors — optional tags for aftertaste attribute
+export const AFTERTASTE_DESCRIPTORS = {
+  Length: {
+    Short: ['⚡ Quick'],
+    Med: ['⚖️ Med'],
+    Long: ['♾️ Persistent', '🌀 Lingering'],
+  },
+} as const;
+
+export type AftertasteType = keyof typeof AFTERTASTE_DESCRIPTORS;
+export type AftertasteSubtype<T extends AftertasteType = AftertasteType> = keyof typeof AFTERTASTE_DESCRIPTORS[T];
+
+// Overall Descriptors — optional tags for overall attribute
+export const OVERALL_DESCRIPTORS = {
+  Balance: {
+    Profile: ['⚖️ Balanced', '🧩 Disjointed (Unbalance)', '🔗 Intergrated (Balance)'],
+  },
+  Clarity: {
+    Cup: ['🌫️ Dirty (Murky)', '✨ Clean (Clear)'],
+  },
+  Complexity: {
+    Profile: ['🌈 Rich (High Complex)', '▫️ Poor (Low Complex)'],
+  },
+  'Bad Taste': {
+    Astrigent: ['🌵 Tingy', '😮‍💨 Puckering'],
+    Drying: ['🍂 Parching', '🌾 Grassy'],
+  },
+} as const;
+
+export type OverallType = keyof typeof OVERALL_DESCRIPTORS;
+export type OverallSubtype<T extends OverallType = OverallType> = keyof typeof OVERALL_DESCRIPTORS[T];
+
+// Sweetness Descriptors — quick family tags + optional detail tags
+export const SWEETNESS_DESCRIPTORS = {
+  '🥜 Nutty': ['Almond', 'Hazelnut', 'Walnut'],
+  '🍫 Cocoa': ['Chocolate', 'Dark Chocolate', 'Cocoa Powder'],
+  '🍯 Sweet': ['Honey', 'Syrup', 'Sugar-like'],
+  '🍦 Vanilla': ['Creamy', 'Soft Vanilla Notes'],
+  '🍬 Brown Sugar': ['Caramel', 'Molasses', 'Toffee'],
+  '🌿 Spice': ['Cinnamon', 'Clove', 'Nutmeg', 'Pepper'],
+} as const;
+
+export type SweetnessFamily = keyof typeof SWEETNESS_DESCRIPTORS;
 
 /** Calculate total score from 8 attributes (all 1s = 55, all 9s = 100) */
 export function calculateTotalScore(scores: TastingScores): number {
@@ -137,13 +271,183 @@ export function getScoreHex(score: number): string {
   return '#2d6a4f';
 }
 
+type RatioReferenceRow = {
+  under: number;
+  ey18: number;
+  ey19: number;
+  ey20: number;
+  ey21: number;
+  over22: number;
+  over23: number;
+  over24: number;
+  exceed: number;
+};
+
+const RATIO_TDS_REFERENCE: Record<number, RatioReferenceRow> = {
+  13: { under: 1.56, ey18: 1.57, ey19: 1.65, ey20: 1.73, ey21: 1.80, over22: 1.87, over23: 1.94, over24: 2.01, exceed: 2.08 },
+  14: { under: 1.45, ey18: 1.46, ey19: 1.53, ey20: 1.60, ey21: 1.68, over22: 1.75, over23: 1.83, over24: 1.90, exceed: 1.98 },
+  15: { under: 1.35, ey18: 1.36, ey19: 1.40, ey20: 1.48, ey21: 1.55, over22: 1.65, over23: 1.70, over24: 1.77, exceed: 1.85 },
+  16: { under: 1.24, ey18: 1.25, ey19: 1.31, ey20: 1.36, ey21: 1.45, over22: 1.46, over23: 1.60, over24: 1.68, exceed: 1.76 },
+  17: { under: 1.15, ey18: 1.16, ey19: 1.22, ey20: 1.28, ey21: 1.35, over22: 1.40, over23: 1.50, over24: 1.58, exceed: 1.65 },
+  18: { under: 1.05, ey18: 1.15, ey19: 1.20, ey20: 1.25, ey21: 1.30, over22: 1.37, over23: 1.44, over24: 1.50, exceed: 1.56 },
+  19: { under: 1.02, ey18: 1.03, ey19: 1.07, ey20: 1.14, ey21: 1.18, over22: 1.23, over23: 1.33, over24: 1.40, exceed: 1.48 },
+  20: { under: 0.96, ey18: 0.97, ey19: 1.02, ey20: 1.07, ey21: 1.13, over22: 1.17, over23: 1.28, over24: 1.35, exceed: 1.43 },
+  21: { under: 0.91, ey18: 0.92, ey19: 0.97, ey20: 1.02, ey21: 1.08, over22: 1.12, over23: 1.23, over24: 1.31, exceed: 1.38 },
+  22: { under: 0.87, ey18: 0.88, ey19: 0.93, ey20: 0.98, ey21: 1.03, over22: 1.07, over23: 1.17, over24: 1.25, exceed: 1.32 },
+  23: { under: 0.84, ey18: 0.85, ey19: 0.89, ey20: 0.94, ey21: 0.99, over22: 1.03, over23: 1.12, over24: 1.19, exceed: 1.26 },
+  24: { under: 0.81, ey18: 0.82, ey19: 0.86, ey20: 0.91, ey21: 0.96, over22: 1.00, over23: 1.09, over24: 1.16, exceed: 1.23 },
+};
+
+export type ExtractionTier = 'under' | 'ideal' | 'over' | 'fail';
+
+export type ExtractionClassification = {
+  source: 'ey' | 'ratio-reference';
+  label: string;
+  tier: ExtractionTier;
+};
+
+export function parseReferenceRatio(ratioText: string): number | null {
+  const raw = (ratioText ?? '').trim();
+  if (!raw) return null;
+
+  let parsed = Number.NaN;
+  if (raw.includes(':')) {
+    parsed = parseFloat(raw.split(':').pop() ?? '');
+  } else if (raw.includes('/')) {
+    parsed = parseFloat(raw.split('/').pop() ?? '');
+  } else {
+    parsed = parseFloat(raw);
+  }
+
+  if (!Number.isFinite(parsed)) return null;
+
+  const rounded = Math.round(parsed);
+  return rounded in RATIO_TDS_REFERENCE ? rounded : null;
+}
+
+export function parseRatioDenominator(ratioText: string): number | null {
+  const raw = (ratioText ?? '').trim();
+  if (!raw) return null;
+
+  let parsed = Number.NaN;
+  if (raw.includes(':')) {
+    parsed = parseFloat(raw.split(':').pop() ?? '');
+  } else if (raw.includes('/')) {
+    parsed = parseFloat(raw.split('/').pop() ?? '');
+  } else {
+    parsed = parseFloat(raw);
+  }
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+export function estimateWaterOut(dose: number, ratioText: string): number | null {
+  const ratio = parseRatioDenominator(ratioText);
+  if (!Number.isFinite(dose) || dose <= 0 || ratio === null) return null;
+  // Estimation rule from workflow: waterOut = dose * ratio - dose * 2
+  const estimated = (dose * ratio) - (dose * 2);
+  return estimated > 0 ? estimated : null;
+}
+
+export function calculateExtractionYieldPercent(tdsPercent: number, liquidOut: number, dose: number): number | null {
+  if (!Number.isFinite(tdsPercent) || !Number.isFinite(liquidOut) || !Number.isFinite(dose)) return null;
+  if (liquidOut <= 0 || dose <= 0) return null;
+  return (tdsPercent * liquidOut) / dose;
+}
+
+export function getQuickGuideTdsTarget(ratioText: string, eyPercent: number): number | null {
+  if (!Number.isFinite(eyPercent) || eyPercent <= 0) return null;
+
+  const refRatio = parseReferenceRatio(ratioText);
+  if (refRatio !== null && Number.isInteger(eyPercent)) {
+    const row = RATIO_TDS_REFERENCE[refRatio];
+    if (eyPercent === 18) return row.under;
+    if (eyPercent === 19) return row.ey18;
+    if (eyPercent === 20) return row.ey19;
+    if (eyPercent === 21) return row.ey20;
+    if (eyPercent === 22) return row.ey21;
+  }
+
+  const ratio = parseRatioDenominator(ratioText);
+  if (ratio === null || ratio <= 2) return null;
+  // From EY = TDS * (waterOut/dose), and waterOut≈dose*(ratio-2): TDS≈EY/(ratio-2)
+  return eyPercent / (ratio - 2);
+}
+
+export function classifyExtractionYield(eyPercent: number): ExtractionClassification {
+  if (eyPercent < 18) {
+    return { source: 'ey', label: 'Under-extracted', tier: 'under' };
+  }
+  if (eyPercent > 22) {
+    return { source: 'ey', label: 'Over-extracted', tier: 'over' };
+  }
+  return { source: 'ey', label: 'Ideal', tier: 'ideal' };
+}
+
+export function classifyTdsByRatioReference(ratioText: string, tdsPercent: number): ExtractionClassification | null {
+  const ratio = parseReferenceRatio(ratioText);
+  if (ratio === null || !Number.isFinite(tdsPercent)) return null;
+
+  const row = RATIO_TDS_REFERENCE[ratio];
+  if (tdsPercent < row.ey18) return { source: 'ratio-reference', label: 'Under (<18%)', tier: 'under' };
+  if (tdsPercent < row.ey19) return { source: 'ratio-reference', label: '18–19%', tier: 'ideal' };
+  if (tdsPercent < row.ey20) return { source: 'ratio-reference', label: '19–20%', tier: 'ideal' };
+  if (tdsPercent < row.ey21) return { source: 'ratio-reference', label: '20–21%', tier: 'ideal' };
+  if (tdsPercent < row.over22) return { source: 'ratio-reference', label: '21–22%', tier: 'ideal' };
+  if (tdsPercent < row.over23) return { source: 'ratio-reference', label: 'Over 22–23% EX', tier: 'over' };
+  if (tdsPercent < row.over24) return { source: 'ratio-reference', label: 'Over 23–24% EX', tier: 'over' };
+  if (tdsPercent < row.exceed) return { source: 'ratio-reference', label: 'Over 24–25% EX', tier: 'over' };
+  return { source: 'ratio-reference', label: 'EXCEED - auto failed', tier: 'fail' };
+}
+
+export function getRatioReferenceIdealWindow(ratioText: string): { ratio: number; min: number; max: number } | null {
+  const ratio = parseReferenceRatio(ratioText);
+  if (ratio === null) return null;
+  const row = RATIO_TDS_REFERENCE[ratio];
+  return { ratio, min: row.ey20, max: row.over22 };
+}
+
 const STORAGE_KEY = 'coffee-tasting-entries';
 
 export function loadEntries(): CoffeeEntry[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as CoffeeEntry[];
+    const parsed = JSON.parse(raw) as Partial<CoffeeEntry>[];
+    return parsed.map((entry) => ({
+      ...entry,
+      entryMode: entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting'),
+      isBlindMode: entry.isBlindMode ?? (entry.notes ?? '').includes('[Blind Mode]'),
+      focusedAttributes: entry.focusedAttributes ?? [],
+      brewMethod: entry.brewMethod ?? '',
+      brewDose: entry.brewDose ?? '',
+      brewRatio: entry.brewRatio ?? '',
+      brewWaterIn: entry.brewWaterIn ?? '',
+      brewYield: entry.brewYield ?? '',
+      brewTemp: entry.brewTemp ?? '',
+      brewTime: entry.brewTime ?? '',
+      brewTDS: entry.brewTDS ?? '',
+      brewWater: entry.brewWater ?? '',
+      brewGrinder: entry.brewGrinder ?? '',
+      brewGrindLevel: entry.brewGrindLevel ?? '',
+      brewGrindClicks: entry.brewGrindClicks ?? '',
+      brewGrindMicrons: entry.brewGrindMicrons ?? '',
+      brewGrindSize: entry.brewGrindSize ?? '',
+      brewPours: entry.brewPours ?? [],
+      brewRecipeNotes: entry.brewRecipeNotes ?? '',
+      tastingLiquidMl: entry.tastingLiquidMl ?? '',
+      tastingDose: entry.tastingDose ?? '',
+      aromaDescriptors: entry.aromaDescriptors ?? [],
+      sweetnessDescriptors: entry.sweetnessDescriptors ?? [],
+      sweetnessDetailDescriptors: entry.sweetnessDetailDescriptors ?? [],
+      acidityDescriptors: entry.acidityDescriptors ?? [],
+      acidityTypeDescriptors: entry.acidityTypeDescriptors ?? inferAcidityTypes(entry.acidityDescriptors ?? []),
+      intensityDescriptors: entry.intensityDescriptors ?? [],
+      mouthfeelDescriptors: entry.mouthfeelDescriptors ?? [],
+      aftertasteDescriptors: entry.aftertasteDescriptors ?? [],
+      overallDescriptors: entry.overallDescriptors ?? [],
+    })) as CoffeeEntry[];
   } catch {
     return [];
   }
@@ -162,17 +466,46 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     sampleIndex: `S-${String(sampleIndex).padStart(2, '0')}`,
+    entryMode: 'tasting',
+    isBlindMode: false,
     name: '',
     origin: '',
     process: 'Washed',
     altitude: '1200-1500m',
     roastLevel: 'Medium',
     roaster: '',
+    brewMethod: '',
+    brewDose: '',
+    brewRatio: '',
+    brewWaterIn: '',
+    brewYield: '',
+    brewTemp: '',
+    brewTime: '',
+    brewTDS: '',
+    brewWater: '',
+    brewGrinder: '',
+    brewGrindLevel: '',
+    brewGrindClicks: '',
+    brewGrindMicrons: '',
+    brewGrindSize: '',
+    brewPours: [],
+    brewRecipeNotes: '',
+    tastingLiquidMl: '',
+    tastingDose: '',
     notes: '',
     scores: defaultScores,
     totalScore: calculateTotalScore(defaultScores),
     isFavorite: false,
     focusedAttributes: [],
+    aromaDescriptors: [],
+    sweetnessDescriptors: [],
+    sweetnessDetailDescriptors: [],
+    acidityDescriptors: [],
+    acidityTypeDescriptors: [],
+    intensityDescriptors: [],
+    mouthfeelDescriptors: [],
+    aftertasteDescriptors: [],
+    overallDescriptors: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -181,17 +514,28 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
 /** Export entries to CSV string */
 export function exportToCSV(entries: CoffeeEntry[]): string {
   const headers = [
-    'Sample Index', 'Name', 'Origin', 'Process', 'Altitude', 'Roast Level', 'Roaster',
+    'Sample Index', 'Mode', 'Blind', 'Name', 'Origin', 'Process', 'Altitude', 'Roast Level', 'Roaster',
+    'Brew Method', 'Brew Dose', 'Brew Ratio', 'Brew Water In', 'Brew Yield', 'Brew Temp', 'Brew Time', 'Brew TDS', 'Brew Water Recipe', 'Grinder', 'Grind Level', 'Grind Clicks', 'Grind µm', 'Grind Note', 'Pour Count', 'Brew Recipe Notes', 'Tasting Liquid (ml)', 'Tasting Dose (g)',
     '🌸 Fragrance', '👃 Aroma', '🍋 Acidity', '🍬 Sweetness',
     '👅 Flavor', '☕ Mouthfeel', '✨ Aftertaste', '🌟 Overall',
-    'Total Score', 'Favorite', 'Focused Attributes', 'Notes', 'Date'
+    'Total Score', 'Favorite', 'Focused Attributes', 'Aroma Tags', 'Sweetness Profile', 'Sweetness Details', 'Acidity Descriptors', 'Acidity Types (Auto)', 'Acidity Intensity', 'Mouthfeel Descriptors', 'Aftertaste Descriptors', 'Overall Descriptors', 'Notes', 'Date'
   ];
   const rows = entries.map(e => [
-    e.sampleIndex, e.name, e.origin, e.process, e.altitude, e.roastLevel, e.roaster,
+    e.sampleIndex, e.entryMode, e.isBlindMode ? 'Yes' : 'No', e.name, e.origin, e.process, e.altitude, e.roastLevel, e.roaster,
+    e.brewMethod, e.brewDose, e.brewRatio, e.brewWaterIn, e.brewYield, e.brewTemp, e.brewTime, e.brewTDS, e.brewWater, e.brewGrinder, e.brewGrindLevel, e.brewGrindClicks, e.brewGrindMicrons, e.brewGrindSize, (e.brewPours ?? []).length, `"${(e.brewRecipeNotes ?? '').replace(/"/g, '""')}"`, e.tastingLiquidMl ?? '', e.tastingDose ?? '',
     e.scores.fragrance, e.scores.aroma, e.scores.acidity, e.scores.sweetness,
     e.scores.flavor, e.scores.mouthfeel, e.scores.aftertaste, e.scores.overall,
     e.totalScore, e.isFavorite ? 'Yes' : 'No',
     e.focusedAttributes.length > 0 ? e.focusedAttributes.join('; ') : '',
+    (e.aromaDescriptors ?? []).length > 0 ? (e.aromaDescriptors ?? []).join('; ') : '',
+    (e.sweetnessDescriptors ?? []).length > 0 ? (e.sweetnessDescriptors ?? []).join('; ') : '',
+    (e.sweetnessDetailDescriptors ?? []).length > 0 ? (e.sweetnessDetailDescriptors ?? []).join('; ') : '',
+    (e.acidityDescriptors ?? []).length > 0 ? (e.acidityDescriptors ?? []).join('; ') : '',
+    (e.acidityTypeDescriptors ?? []).length > 0 ? (e.acidityTypeDescriptors ?? []).join('; ') : '',
+    (e.intensityDescriptors ?? []).length > 0 ? (e.intensityDescriptors ?? []).join('; ') : '',
+    (e.mouthfeelDescriptors ?? []).length > 0 ? (e.mouthfeelDescriptors ?? []).join('; ') : '',
+    (e.aftertasteDescriptors ?? []).length > 0 ? (e.aftertasteDescriptors ?? []).join('; ') : '',
+    (e.overallDescriptors ?? []).length > 0 ? (e.overallDescriptors ?? []).join('; ') : '',
     `"${e.notes.replace(/"/g, '""')}"`,
     new Date(e.createdAt).toLocaleDateString()
   ]);
@@ -206,12 +550,31 @@ export function exportToJSON(entries: CoffeeEntry[]): string {
 /** Export entries to plain text */
 export function exportToText(entries: CoffeeEntry[]): string {
   return entries.map(e => {
+    const modeLine = `Mode: ${e.entryMode}${e.isBlindMode ? ' (Blind)' : ''}`;
+    const brewLines = e.entryMode === 'brewing'
+      ? [
+          e.brewMethod ? `  Method: ${e.brewMethod}` : '',
+          e.brewDose ? `  Dose: ${e.brewDose}g  Ratio: ${e.brewRatio || '—'}  Water In: ${e.brewWaterIn || '—'}g` : '',
+          e.brewYield ? `  Yield: ${e.brewYield}g` : '',
+          e.brewTemp ? `  Temp: ${e.brewTemp}` : '',
+          e.brewTime ? `  Total Time: ${e.brewTime}` : '',
+          e.brewTDS ? `  TDS: ${e.brewTDS}%` : '',
+          e.brewWater ? `  Water Recipe: ${e.brewWater}` : '',
+          e.brewGrinder ? `  Grinder: ${e.brewGrinder}  Level: ${e.brewGrindLevel || '—'}  Clicks: ${e.brewGrindClicks || '—'}  µm: ${e.brewGrindMicrons || '—'}` : '',
+          (e.brewPours ?? []).length > 0
+            ? `  Pours (${e.brewPours.length}): ` + e.brewPours.map((p, i) => `#${i+1} ${p.percent}% ${p.timeStart}-${p.timeEnd} ${p.flowRate ? p.flowRate+'G/s' : ''}${p.action ? ` · ${p.action}` : ''}`).join(' | ')
+            : '',
+          e.brewRecipeNotes ? `  Notes: ${e.brewRecipeNotes}` : '',
+        ].filter(Boolean)
+      : [];
     const lines = [
       `═══════════════════════════════════`,
       `${e.sampleIndex} — ${e.name || 'Unnamed'}`,
+      modeLine,
       `Origin: ${e.origin || '—'}  |  Process: ${e.process}`,
       `Altitude: ${e.altitude}  |  Roast: ${e.roastLevel}`,
       `Roaster: ${e.roaster || '—'}`,
+      ...(brewLines.length > 0 ? ['', 'BREW RECIPE', ...brewLines] : []),
       ``,
       `SCORES`,
       `  🌸 Fragrance:  ${e.scores.fragrance}/9`,

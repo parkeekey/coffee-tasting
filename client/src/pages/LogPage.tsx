@@ -20,13 +20,17 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { CoffeeEntry, getScoreHex, getScoreLabel, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, CoffeeEntry, estimateWaterOut, getScoreHex, getScoreLabel, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
   const [expanded, setExpanded] = useState(false);
   const color = getScoreHex(entry.totalScore);
   const label = getScoreLabel(entry.totalScore);
+  const mode = entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
+  const isTastePadEntry = mode === 'pad';
+  const isBrewingEntry = mode === 'brewing';
+  const isBlindModeEntry = entry.isBlindMode ?? (entry.notes ?? '').includes('[Blind Mode]');
 
   const handleEdit = () => {
     editEntry(entry.id);
@@ -70,6 +74,21 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                 <span className="text-[10px] font-mono-custom font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                   {entry.sampleIndex}
                 </span>
+                {isTastePadEntry && (
+                  <span className="text-[10px] font-medium text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded-full">
+                    Pad Mode
+                  </span>
+                )}
+                {isBrewingEntry && (
+                  <span className="text-[10px] font-medium text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                    Brewing
+                  </span>
+                )}
+                {isBlindModeEntry && (
+                  <span className="text-[10px] font-medium text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded-full">
+                    Blind
+                  </span>
+                )}
                 {entry.isFavorite && (
                   <Star size={10} className="text-amber-500 fill-amber-500" />
                 )}
@@ -157,12 +176,256 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
           {entry.roaster && (
             <p className="text-xs text-muted-foreground">Roaster: {entry.roaster}</p>
           )}
+          {isBrewingEntry && (
+            <div className="mt-2 p-2 bg-emerald-50 rounded-lg border border-emerald-100">
+              <p className="text-xs text-emerald-900 font-medium mb-1">☕ Brewing Recipe</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                {entry.brewMethod && <p className="text-xs text-emerald-800">Method: {entry.brewMethod}</p>}
+                {entry.brewTemp && <p className="text-xs text-emerald-800">Temp: {entry.brewTemp}</p>}
+                {entry.brewDose && <p className="text-xs text-emerald-800">Dose: {entry.brewDose}g</p>}
+                {entry.brewRatio && <p className="text-xs text-emerald-800">Ratio: {entry.brewRatio}</p>}
+                {entry.brewWaterIn && <p className="text-xs text-emerald-800">Water In: {entry.brewWaterIn}g</p>}
+                {entry.brewYield && <p className="text-xs text-emerald-800">Yield: {entry.brewYield}g</p>}
+                {entry.brewTime && <p className="text-xs text-emerald-800">Time: {entry.brewTime}</p>}
+                {entry.brewWater && <p className="text-xs text-emerald-800">Water: {entry.brewWater}</p>}
+                {entry.brewGrinder && <p className="text-xs text-emerald-800">Grinder: {entry.brewGrinder}</p>}
+                {(entry.brewGrindLevel || entry.brewGrindClicks) && (
+                  <p className="text-xs text-emerald-800">
+                    Grind: {[entry.brewGrindLevel, entry.brewGrindClicks && `${entry.brewGrindClicks} clicks`, entry.brewGrindMicrons && `${entry.brewGrindMicrons}µm`].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
+              {/* Pour table */}
+              {(entry.brewPours ?? []).length > 0 && (
+                <div className="mt-2 rounded-md border border-emerald-200 overflow-hidden">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead>
+                      <tr className="bg-emerald-100 text-emerald-900">
+                        <th className="px-1.5 py-1 text-center font-semibold">#</th>
+                        <th className="px-1.5 py-1 text-center font-semibold">Target %</th>
+                        <th className="px-1.5 py-1 text-center font-semibold">g Σ</th>
+                        <th className="px-1.5 py-1 text-center font-semibold">Time</th>
+                        <th className="px-1.5 py-1 text-center font-semibold">G/s</th>
+                        <th className="px-1.5 py-1 text-center font-semibold">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(entry.brewPours ?? []).map((pour, i) => {
+                        const waterIn = parseFloat(entry.brewWaterIn ?? '');
+                        const prevPercent = i > 0 ? (Number((entry.brewPours ?? [])[i - 1]?.percent) || 0) : 0;
+                        const stepPercent = (Number(pour.percent) || 0) - prevPercent;
+                        const g = (!isNaN(waterIn) && stepPercent > 0)
+                          ? `${((stepPercent / 100) * waterIn).toFixed(1)}`
+                          : '—';
+                        const cumulativeG = (!isNaN(waterIn) && Number(pour.percent) > 0)
+                          ? `${(((Number(pour.percent) || 0) / 100) * waterIn).toFixed(1)}`
+                          : '—';
+                        return (
+                          <tr key={pour.id} className={i % 2 === 0 ? 'bg-white' : 'bg-emerald-50/40'}>
+                            <td className="px-1.5 py-1 text-center font-semibold text-emerald-800">{i + 1}</td>
+                            <td className="px-1.5 py-1 text-center">{pour.percent}%</td>
+                            <td className="px-1.5 py-1 text-center font-semibold leading-tight">
+                              <div>Σ {cumulativeG}</div>
+                              <div className="text-[9px] text-emerald-700/80 font-normal">{stepPercent > 0 ? `Δ ${g}g · ${stepPercent.toFixed(0)}%` : 'Δ —'}</div>
+                            </td>
+                            <td className="px-1.5 py-1 text-center">{[pour.timeStart, pour.timeEnd].filter(Boolean).join('–') || '—'}</td>
+                            <td className="px-1.5 py-1 text-center">{pour.flowRate || '—'}</td>
+                            <td className="px-1.5 py-1 text-center">{pour.action || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {entry.brewRecipeNotes && (
+                <p className="text-xs text-emerald-900 mt-1.5 italic">"{entry.brewRecipeNotes}"</p>
+              )}
+              {entry.brewTDS && (() => {
+                const tds = parseFloat(entry.brewTDS);
+                const dose = parseFloat(entry.brewDose ?? '');
+                const estWaterOut = estimateWaterOut(dose, entry.brewRatio ?? '');
+                const liquid = parseFloat(entry.brewYield || (estWaterOut !== null ? estWaterOut.toFixed(1) : ''));
+                const ey = calculateExtractionYieldPercent(tds, liquid, dose);
+                return (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
+                    <span className="text-sm leading-none">🔬</span>
+                    <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
+                    <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
+                    {ey !== null && (
+                      <>
+                        <span className="text-[11px] text-muted-foreground mx-1">·</span>
+                        <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">EY</span>
+                        <span className="text-sm font-bold font-mono-custom text-cyan-900">{ey.toFixed(1)}%</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          {/* TDS & EY for non-brewing entries */}
+          {!isBrewingEntry && entry.brewTDS && (() => {
+            const tds = parseFloat(entry.brewTDS);
+            const liquid = parseFloat(entry.tastingLiquidMl ?? '');
+            const dose = parseFloat(entry.tastingDose ?? '');
+            const ey = calculateExtractionYieldPercent(tds, liquid, dose);
+            return (
+              <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
+                <span className="text-sm leading-none">🔬</span>
+                <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
+                <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
+                {ey !== null && (
+                  <>
+                    <span className="text-[11px] text-muted-foreground mx-1">·</span>
+                    <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">EY</span>
+                    <span className="text-sm font-bold font-mono-custom text-cyan-900">{ey.toFixed(1)}%</span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
           {entry.focusedAttributes.length > 0 && (
             <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-100">
               <p className="text-xs text-amber-900 font-medium mb-1">🚩 Focused on:</p>
               <p className="text-xs text-amber-800">
                 {entry.focusedAttributes.map(a => SCORE_ATTRIBUTES.find(sa => sa.key === a)?.label).join(', ')}
               </p>
+            </div>
+          )}
+          {(entry.aromaDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
+              <p className="text-xs text-orange-900 font-medium mb-1">👃 Aroma Standard Tags:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.aromaDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-orange-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.sweetnessDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
+              <p className="text-xs text-orange-900 font-medium mb-1">🍬 Sweetness Style:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.sweetnessDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-yellow-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.sweetnessDetailDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
+              <p className="text-xs text-orange-900 font-medium mb-1">🍯 Sweetness Details:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.sweetnessDetailDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-orange-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.acidityDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+              <p className="text-xs text-yellow-900 font-medium mb-1">🍋 Acidity Flavors:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.acidityDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-amber-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.acidityTypeDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+              <p className="text-xs text-yellow-900 font-medium mb-1">🧪 Acidity Types (Auto):</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.acidityTypeDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-amber-700 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.intensityDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+              <p className="text-xs text-yellow-900 font-medium mb-1">⚡ Acidity Intensity:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.intensityDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-amber-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.mouthfeelDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
+              <p className="text-xs text-blue-900 font-medium mb-1">☕ Mouthfeel Types:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.mouthfeelDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-blue-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.aftertasteDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-100">
+              <p className="text-xs text-purple-900 font-medium mb-1">✨ Aftertaste Length:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.aftertasteDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-purple-500 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(entry.overallDescriptors ?? []).length > 0 && (
+            <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+              <p className="text-xs text-slate-900 font-medium mb-1">🌟 Coffee Character Profile:</p>
+              <div className="flex flex-wrap gap-1">
+                {(entry.overallDescriptors ?? []).map((descriptor) => (
+                  <span
+                    key={descriptor}
+                    className="text-xs px-2 py-1 rounded-full bg-slate-600 text-white font-medium"
+                  >
+                    {descriptor}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
           {entry.notes && (
@@ -236,6 +499,7 @@ export default function LogPage() {
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showPreferenceInsights, setShowPreferenceInsights] = useState(false);
+  const [modeView, setModeView] = useState<'all' | 'tasting' | 'brewing' | 'pad'>('all');
 
   const preferenceInsights = useMemo(() => {
     if (entries.length === 0) return null;
@@ -289,6 +553,8 @@ export default function LogPage() {
   }, [entries]);
 
   const filtered = entries.filter(e => {
+    const entryMode = e.entryMode ?? ((e.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
+    if (modeView !== 'all' && entryMode !== modeView) return false;
     if (showFavoritesOnly && !e.isFavorite) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -339,6 +605,28 @@ export default function LogPage() {
             placeholder="Search by name, origin, notes..."
             className="pl-8 h-9 text-sm"
           />
+        </div>
+
+        {/* Mode view switch */}
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'tasting', label: 'Tasting' },
+            { id: 'brewing', label: 'Brewing' },
+            { id: 'pad', label: 'Pad' },
+          ].map((view) => (
+            <button
+              key={view.id}
+              onClick={() => setModeView(view.id as 'all' | 'tasting' | 'brewing' | 'pad')}
+              className={`px-2 py-1 text-[10px] rounded-full border transition-colors ${
+                modeView === view.id
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'text-muted-foreground border-border hover:text-foreground'
+              }`}
+            >
+              {view.label}
+            </button>
+          ))}
         </div>
       </div>
 
