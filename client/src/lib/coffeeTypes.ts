@@ -27,6 +27,10 @@ export interface TastingScores {
   overall: number;     // 🌟
 }
 
+export type SensoryNotes = Record<keyof TastingScores, string>;
+export type SensoryReaction = 'like' | 'soso' | 'dislike' | '';
+export type SensoryReactions = Record<keyof TastingScores, SensoryReaction>;
+
 export type EntryMode = 'tasting' | 'brewing' | 'pad';
 
 export interface BrewPour {
@@ -71,6 +75,8 @@ export interface CoffeeEntry {
   tastingDose: string;       // dose (g) for EY calc in tasting mode
   notes: string;             // flavor notes / descriptors
   scores: TastingScores;
+  sensoryNotes: SensoryNotes; // optional note per sensory attribute
+  sensoryReactions: SensoryReactions; // optional like/soso/dislike per sensory attribute
   totalScore: number;
   isFavorite: boolean;
   focusedAttributes: (keyof TastingScores)[];  // e.g. ['acidity', 'mouthfeel']
@@ -356,6 +362,56 @@ export function calculateExtractionYieldPercent(tdsPercent: number, liquidOut: n
   return (tdsPercent * liquidOut) / dose;
 }
 
+export function estimateExtractionYieldFromRatioReference(ratioText: string, tdsPercent: number): number | null {
+  const ratio = parseReferenceRatio(ratioText);
+  if (ratio === null || !Number.isFinite(tdsPercent)) return null;
+
+  const row = RATIO_TDS_REFERENCE[ratio];
+  const points: Array<{ tds: number; ey: number }> = [
+    { tds: row.under, ey: 18 },
+    { tds: row.ey18, ey: 19 },
+    { tds: row.ey19, ey: 20 },
+    { tds: row.ey20, ey: 21 },
+    { tds: row.ey21, ey: 22 },
+    { tds: row.over22, ey: 23 },
+    { tds: row.over23, ey: 24 },
+    { tds: row.over24, ey: 25 },
+    { tds: row.exceed, ey: 26 },
+  ];
+
+  const interpolate = (
+    currentTds: number,
+    lowTds: number,
+    lowEy: number,
+    highTds: number,
+    highEy: number,
+  ) => {
+    if (highTds <= lowTds) return highEy;
+    const ratioValue = (currentTds - lowTds) / (highTds - lowTds);
+    return lowEy + (ratioValue * (highEy - lowEy));
+  };
+
+  if (tdsPercent < points[0].tds) return null;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    if (tdsPercent <= curr.tds) {
+      return interpolate(tdsPercent, prev.tds, prev.ey, curr.tds, curr.ey);
+    }
+  }
+
+  return null;
+}
+
+export function estimateExtractionYieldFromQuickGuide(ratioText: string, tdsPercent: number): number | null {
+  if (!Number.isFinite(tdsPercent) || tdsPercent <= 0) return null;
+  const ratio = parseRatioDenominator(ratioText);
+  if (ratio === null || ratio <= 2) return null;
+  // Quick guide inverse: TDS ≈ EY / (ratio - 2)  =>  EY ≈ TDS * (ratio - 2)
+  return tdsPercent * (ratio - 2);
+}
+
 export function getQuickGuideTdsTarget(ratioText: string, eyPercent: number): number | null {
   if (!Number.isFinite(eyPercent) || eyPercent <= 0) return null;
 
@@ -401,6 +457,15 @@ export function classifyTdsByRatioReference(ratioText: string, tdsPercent: numbe
   return { source: 'ratio-reference', label: 'EXCEED - auto failed', tier: 'fail' };
 }
 
+export type TdsStrengthZone = 'weak' | 'ideal' | 'strong' | 'out-of-range';
+
+export function classifyTdsByStrengthZone(tdsPercent: number): TdsStrengthZone {
+  if (tdsPercent >= 0.90 && tdsPercent < 1.15) return 'weak';
+  if (tdsPercent >= 1.15 && tdsPercent <= 1.45) return 'ideal';
+  if (tdsPercent > 1.45 && tdsPercent <= 1.80) return 'strong';
+  return 'out-of-range';
+}
+
 export function getRatioReferenceIdealWindow(ratioText: string): { ratio: number; min: number; max: number } | null {
   const ratio = parseReferenceRatio(ratioText);
   if (ratio === null) return null;
@@ -438,6 +503,26 @@ export function loadEntries(): CoffeeEntry[] {
       brewRecipeNotes: entry.brewRecipeNotes ?? '',
       tastingLiquidMl: entry.tastingLiquidMl ?? '',
       tastingDose: entry.tastingDose ?? '',
+      sensoryNotes: {
+        fragrance: entry.sensoryNotes?.fragrance ?? '',
+        aroma: entry.sensoryNotes?.aroma ?? '',
+        acidity: entry.sensoryNotes?.acidity ?? '',
+        sweetness: entry.sensoryNotes?.sweetness ?? '',
+        flavor: entry.sensoryNotes?.flavor ?? '',
+        mouthfeel: entry.sensoryNotes?.mouthfeel ?? '',
+        aftertaste: entry.sensoryNotes?.aftertaste ?? '',
+        overall: entry.sensoryNotes?.overall ?? '',
+      },
+      sensoryReactions: {
+        fragrance: entry.sensoryReactions?.fragrance ?? '',
+        aroma: entry.sensoryReactions?.aroma ?? '',
+        acidity: entry.sensoryReactions?.acidity ?? '',
+        sweetness: entry.sensoryReactions?.sweetness ?? '',
+        flavor: entry.sensoryReactions?.flavor ?? '',
+        mouthfeel: entry.sensoryReactions?.mouthfeel ?? '',
+        aftertaste: entry.sensoryReactions?.aftertaste ?? '',
+        overall: entry.sensoryReactions?.overall ?? '',
+      },
       aromaDescriptors: entry.aromaDescriptors ?? [],
       sweetnessDescriptors: entry.sweetnessDescriptors ?? [],
       sweetnessDetailDescriptors: entry.sweetnessDetailDescriptors ?? [],
@@ -462,6 +547,26 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
   const defaultScores: TastingScores = {
     fragrance: 5, aroma: 5, acidity: 5, sweetness: 5,
     flavor: 5, mouthfeel: 5, aftertaste: 5, overall: 5,
+  };
+  const defaultSensoryNotes: SensoryNotes = {
+    fragrance: '',
+    aroma: '',
+    acidity: '',
+    sweetness: '',
+    flavor: '',
+    mouthfeel: '',
+    aftertaste: '',
+    overall: '',
+  };
+  const defaultSensoryReactions: SensoryReactions = {
+    fragrance: '',
+    aroma: '',
+    acidity: '',
+    sweetness: '',
+    flavor: '',
+    mouthfeel: '',
+    aftertaste: '',
+    overall: '',
   };
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -494,6 +599,8 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
     tastingDose: '',
     notes: '',
     scores: defaultScores,
+    sensoryNotes: defaultSensoryNotes,
+    sensoryReactions: defaultSensoryReactions,
     totalScore: calculateTotalScore(defaultScores),
     isFavorite: false,
     focusedAttributes: [],
@@ -518,6 +625,8 @@ export function exportToCSV(entries: CoffeeEntry[]): string {
     'Brew Method', 'Brew Dose', 'Brew Ratio', 'Brew Water In', 'Brew Yield', 'Brew Temp', 'Brew Time', 'Brew TDS', 'Brew Water Recipe', 'Grinder', 'Grind Level', 'Grind Clicks', 'Grind µm', 'Grind Note', 'Pour Count', 'Brew Recipe Notes', 'Tasting Liquid (ml)', 'Tasting Dose (g)',
     '🌸 Fragrance', '👃 Aroma', '🍋 Acidity', '🍬 Sweetness',
     '👅 Flavor', '☕ Mouthfeel', '✨ Aftertaste', '🌟 Overall',
+    'Fragrance Note', 'Aroma Note', 'Acidity Note', 'Sweetness Note', 'Flavor Note', 'Mouthfeel Note', 'Aftertaste Note', 'Overall Note',
+    'Fragrance Reaction', 'Aroma Reaction', 'Acidity Reaction', 'Sweetness Reaction', 'Flavor Reaction', 'Mouthfeel Reaction', 'Aftertaste Reaction', 'Overall Reaction',
     'Total Score', 'Favorite', 'Focused Attributes', 'Aroma Tags', 'Sweetness Profile', 'Sweetness Details', 'Acidity Descriptors', 'Acidity Types (Auto)', 'Acidity Intensity', 'Mouthfeel Descriptors', 'Aftertaste Descriptors', 'Overall Descriptors', 'Notes', 'Date'
   ];
   const rows = entries.map(e => [
@@ -525,6 +634,22 @@ export function exportToCSV(entries: CoffeeEntry[]): string {
     e.brewMethod, e.brewDose, e.brewRatio, e.brewWaterIn, e.brewYield, e.brewTemp, e.brewTime, e.brewTDS, e.brewWater, e.brewGrinder, e.brewGrindLevel, e.brewGrindClicks, e.brewGrindMicrons, e.brewGrindSize, (e.brewPours ?? []).length, `"${(e.brewRecipeNotes ?? '').replace(/"/g, '""')}"`, e.tastingLiquidMl ?? '', e.tastingDose ?? '',
     e.scores.fragrance, e.scores.aroma, e.scores.acidity, e.scores.sweetness,
     e.scores.flavor, e.scores.mouthfeel, e.scores.aftertaste, e.scores.overall,
+    `"${(e.sensoryNotes?.fragrance ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.aroma ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.acidity ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.sweetness ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.flavor ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.mouthfeel ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.aftertaste ?? '').replace(/"/g, '""')}"`,
+    `"${(e.sensoryNotes?.overall ?? '').replace(/"/g, '""')}"`,
+    e.sensoryReactions?.fragrance ?? '',
+    e.sensoryReactions?.aroma ?? '',
+    e.sensoryReactions?.acidity ?? '',
+    e.sensoryReactions?.sweetness ?? '',
+    e.sensoryReactions?.flavor ?? '',
+    e.sensoryReactions?.mouthfeel ?? '',
+    e.sensoryReactions?.aftertaste ?? '',
+    e.sensoryReactions?.overall ?? '',
     e.totalScore, e.isFavorite ? 'Yes' : 'No',
     e.focusedAttributes.length > 0 ? e.focusedAttributes.join('; ') : '',
     (e.aromaDescriptors ?? []).length > 0 ? (e.aromaDescriptors ?? []).join('; ') : '',
@@ -585,6 +710,20 @@ export function exportToText(entries: CoffeeEntry[]): string {
       `  ☕ Mouthfeel:  ${e.scores.mouthfeel}/9`,
       `  ✨ Aftertaste: ${e.scores.aftertaste}/9`,
       `  🌟 Overall:    ${e.scores.overall}/9`,
+      ...SCORE_ATTRIBUTES
+        .map((attr) => {
+          const note = e.sensoryNotes?.[attr.key]?.trim();
+          return note ? `    ↳ ${attr.label} note: ${note}` : '';
+        })
+        .filter(Boolean),
+      ...SCORE_ATTRIBUTES
+        .map((attr) => {
+          const reaction = e.sensoryReactions?.[attr.key] ?? '';
+          if (!reaction) return '';
+          const reactionLabel = reaction === 'like' ? 'Like' : reaction === 'soso' ? 'So-so' : 'Dislike';
+          return `    ↳ ${attr.label} reaction: ${reactionLabel}`;
+        })
+        .filter(Boolean),
       ``,
       `  TOTAL: ${e.totalScore} / 100  ${e.isFavorite ? '★ FAVORITE' : ''}`,
       `  Label: ${getScoreLabel(e.totalScore)}`,

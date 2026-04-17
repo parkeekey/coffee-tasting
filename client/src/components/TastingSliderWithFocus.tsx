@@ -4,6 +4,7 @@
 // =============================================================
 
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AcidityDescriptorSelector } from './AcidityDescriptorSelector';
@@ -20,6 +21,10 @@ interface TastingSliderWithFocusProps {
   description: string;
   value: number;
   onChange: (value: number) => void;
+  note?: string;
+  onNoteChange?: (value: string) => void;
+  reaction?: 'like' | 'soso' | 'dislike' | '';
+  onReactionChange?: (value: 'like' | 'soso' | 'dislike' | '') => void;
   isFocused: boolean;
   onFocusToggle: () => void;
   aromaDescriptors?: string[];  // Only for aroma attribute
@@ -73,6 +78,10 @@ export function TastingSliderWithFocus({
   description,
   value,
   onChange,
+  note,
+  onNoteChange,
+  reaction,
+  onReactionChange,
   isFocused,
   onFocusToggle,
   aromaDescriptors,
@@ -104,7 +113,7 @@ export function TastingSliderWithFocus({
   const isAcidity = attributeKey === 'acidity';
   const isMouthfeel = attributeKey === 'mouthfeel';
   const isAftertaste = attributeKey === 'aftertaste';
-  const isOverall = attributeKey === 'overall';
+  const isOverall = attributeKey === 'flavor';
 
   return (
     <div
@@ -188,6 +197,46 @@ export function TastingSliderWithFocus({
         <span className="text-[10px] text-muted-foreground">9</span>
       </div>
 
+      {onReactionChange && (
+        <div className="mt-2 px-1">
+          <div className="flex items-center gap-1">
+            {[
+              { key: 'like' as const, text: 'Like', base: 'text-emerald-700 border-emerald-300 bg-emerald-50' },
+              { key: 'soso' as const, text: 'So-so', base: 'text-amber-700 border-amber-300 bg-amber-50' },
+              { key: 'dislike' as const, text: 'Dislike', base: 'text-rose-700 border-rose-300 bg-rose-50' },
+            ].map((option) => {
+              const selected = reaction === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => onReactionChange(selected ? '' : option.key)}
+                  className={cn(
+                    'h-7 px-2 rounded-md border text-[11px] font-semibold transition-colors',
+                    selected
+                      ? option.base
+                      : 'text-muted-foreground border-border bg-white hover:bg-muted/60'
+                  )}
+                >
+                  {option.text}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {onNoteChange && (
+        <div className="mt-1.5 px-1">
+          <input
+            value={note ?? ''}
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder={`note...`}
+            className="w-full h-7 px-2 text-[11px] text-muted-foreground placeholder:text-muted-foreground/50 bg-transparent border-0 border-b border-dashed border-border/50 focus:outline-none focus:border-border/80 transition-colors"
+          />
+        </div>
+      )}
+
       {/* Aroma Descriptor Selector — Only show for aroma */}
       {isAroma && onAromaDescriptorsChange && (
         <AromaDescriptorSelector
@@ -240,7 +289,7 @@ export function TastingSliderWithFocus({
         />
       )}
 
-      {/* Overall Descriptor Selector — Only show for overall */}
+      {/* Overall Descriptor Selector — Show for flavor */}
       {isOverall && onOverallDescriptorsChange && (
         <OverallDescriptorSelector
           selected={overallDescriptors || []}

@@ -3,7 +3,7 @@
 // Displays score 55–100 as a colored arc with animated fill
 // =============================================================
 
-import { getScoreHex, getScoreLabel } from '@/lib/coffeeTypes';
+import { getScoreHex } from '@/lib/coffeeTypes';
 
 interface ScoreArcProps {
   score: number;
@@ -49,10 +49,9 @@ export function ScoreArc({ score, size = 120, strokeWidth = 10 }: ScoreArcProps)
     : '';
 
   const color = getScoreHex(score);
-  const label = getScoreLabel(score);
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         {/* Track */}
         <path
@@ -100,12 +99,6 @@ export function ScoreArc({ score, size = 120, strokeWidth = 10 }: ScoreArcProps)
           / 100
         </text>
       </svg>
-      <span
-        className="text-xs font-medium tracking-wide uppercase"
-        style={{ color, fontFamily: "'DM Sans', sans-serif", letterSpacing: '0.05em' }}
-      >
-        {label}
-      </span>
     </div>
   );
 }

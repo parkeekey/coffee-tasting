@@ -4,8 +4,8 @@
 //           Grinder (name, level, clicks, µm) · Pour Planner table · Notes
 // =============================================================
 
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Minus } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Plus, Minus, NotebookPen } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,6 +60,13 @@ export function BrewingRecipeSection({
   onPoursChange,
 }: BrewingRecipeSectionProps) {
   const [pourCount, setPourCount] = useState(() => draft.brewPours?.length ?? 0);
+  const [openNoteRows, setOpenNoteRows] = useState<Set<number>>(() => {
+    const s = new Set<number>();
+    (draft.brewPours ?? []).forEach(p => { if (p.action) s.add(p.id); });
+    return s;
+  });
+  const toggleNoteRow = (id: number) =>
+    setOpenNoteRows(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
   // Calculate Water In from Dose × Ratio
   const waterInNum = useMemo(() => {
@@ -259,7 +266,7 @@ export function BrewingRecipeSection({
                   <th className="px-1 py-2 text-center font-semibold w-14">Start</th>
                   <th className="px-1 py-2 text-center font-semibold w-14">End</th>
                   <th className="px-1 py-2 text-left font-semibold w-20">G/s</th>
-                  <th className="px-1 py-2 text-left font-semibold">Action</th>
+                  <th className="px-1 py-2 text-center font-semibold w-7"></th>
                 </tr>
               </thead>
               <tbody>
@@ -273,6 +280,7 @@ export function BrewingRecipeSection({
                   const nonIncreasing = Number(pour.percent) < prevPercent;
                   const isOver = usedPercent > 100;
                   return (
+                    <React.Fragment key={pour.id}>
                     <tr
                       key={pour.id}
                       className={cn(
@@ -337,17 +345,43 @@ export function BrewingRecipeSection({
                           placeholder="e.g. 3.5"
                         />
                       </td>
-                      {/* Action note */}
-                      <td className="px-1 py-1.5">
-                        <input
-                          type="text"
-                          value={pour.action ?? ''}
-                          onChange={e => updatePour(i, 'action', e.target.value)}
-                          className="w-full bg-transparent border-b border-cyan-300 pb-0.5 focus:outline-none focus:border-cyan-700 text-xs"
-                          placeholder="e.g. swirl, stir"
-                        />
+                      {/* Action toggle */}
+                      <td className="px-1 py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleNoteRow(pour.id)}
+                          className={cn(
+                            'w-6 h-6 rounded flex items-center justify-center transition-colors',
+                            openNoteRows.has(pour.id) || pour.action
+                              ? 'text-cyan-700 bg-cyan-100'
+                              : 'text-cyan-400 hover:text-cyan-700 hover:bg-cyan-50'
+                          )}
+                        >
+                          <NotebookPen size={11} />
+                        </button>
                       </td>
                     </tr>
+                    {(openNoteRows.has(pour.id) || !!pour.action) && (
+                      <tr
+                        key={`note-${pour.id}`}
+                        className={cn(
+                          i % 2 === 0 ? 'bg-white' : 'bg-cyan-50/40',
+                          'border-t-0'
+                        )}
+                      >
+                        <td colSpan={7} className="px-3 pb-2 pt-0">
+                          <input
+                            type="text"
+                            value={pour.action ?? ''}
+                            onChange={e => updatePour(i, 'action', e.target.value)}
+                            autoFocus={openNoteRows.has(pour.id) && !pour.action}
+                            className="w-full bg-transparent border-b border-dashed border-cyan-300 pb-0.5 focus:outline-none focus:border-cyan-600 text-[11px] text-cyan-800 placeholder:text-cyan-400/60"
+                            placeholder="note…"
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

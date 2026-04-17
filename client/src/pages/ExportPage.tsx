@@ -3,14 +3,15 @@
 // Design: "Specialty Lab" — warm scientific minimalism
 // =============================================================
 
-import { useEffect, useMemo, useState } from 'react';
-import { Download, FileText, FileJson, FileSpreadsheet, Copy, Check, Coffee } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Camera, FileText, FileJson, FileSpreadsheet, Copy, Check, Coffee } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
 import { exportToCSV, exportToJSON, exportToText, getScoreHex, getScoreLabel } from '@/lib/coffeeTypes';
+import { ShareCard } from '@/components/ShareCard';
 
-type ExportFormat = 'csv' | 'json' | 'text';
+type ExportFormat = 'csv' | 'json' | 'text' | 'png';
 
 interface FormatOption {
   id: ExportFormat;
@@ -46,6 +47,14 @@ const FORMAT_OPTIONS: FormatOption[] = [
     mime: 'text/plain',
     ext: 'txt',
   },
+  {
+    id: 'png',
+    label: 'PNG Snapshot',
+    description: 'Visual log image for easy sharing',
+    icon: <Camera size={20} />,
+    mime: 'image/png',
+    ext: 'png',
+  },
 ];
 
 function downloadFile(content: string, filename: string, mime: string) {
@@ -64,8 +73,10 @@ export default function ExportPage() {
   const { entries } = useCoffee();
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv');
   const [copied, setCopied] = useState(false);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
+  const snapshotRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSelectedEntryIds(prev => {
@@ -110,15 +121,16 @@ export default function ExportPage() {
       case 'csv': return exportToCSV(selectedEntries);
       case 'json': return exportToJSON(selectedEntries);
       case 'text': return exportToText(selectedEntries);
+      case 'png': return '';
     }
   };
 
   const getFilename = (format: ExportFormat): string => {
     const date = new Date().toISOString().slice(0, 10);
-    return `coffee-tasting-${date}.${format === 'csv' ? 'csv' : format === 'json' ? 'json' : 'txt'}`;
+    return `coffee-tasting-${date}.${format === 'csv' ? 'csv' : format === 'json' ? 'json' : format === 'text' ? 'txt' : 'png'}`;
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (entries.length === 0) {
       toast.error('No entries to export. Add some tasting entries first!');
       return;
@@ -127,6 +139,12 @@ export default function ExportPage() {
       toast.error('No logs selected. Select at least one log to export.');
       return;
     }
+
+    if (selectedFormat === 'png') {
+      await handleExportSnapshot();
+      return;
+    }
+
     const fmt = FORMAT_OPTIONS.find(f => f.id === selectedFormat)!;
     const content = getContent(selectedFormat);
     downloadFile(content, getFilename(selectedFormat), fmt.mime);
@@ -136,6 +154,10 @@ export default function ExportPage() {
   };
 
   const handleCopy = async () => {
+    if (selectedFormat === 'png') {
+      toast.error('PNG snapshot cannot be copied as text. Use Download instead.');
+      return;
+    }
     if (entries.length === 0) {
       toast.error('No entries to copy.');
       return;
@@ -151,11 +173,82 @@ export default function ExportPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExportSnapshot = async () => {
+    if (entries.length === 0) {
+      toast.error('No entries to export. Add some tasting entries first!');
+      return;
+    }
+    if (selectedEntries.length === 0) {
+      toast.error('No logs selected. Select at least one log to export.');
+      return;
+    }
+    if (!snapshotRef.current) return;
+
+    setSavingSnapshot(true);
+    try {
+      const { toBlob } = await import('html-to-image');
+      const dynamicScale = selectedEntries.length > 10 ? 1 : selectedEntries.length > 4 ? 1.5 : 2;
+      const blob = await toBlob(snapshotRef.current, {
+        cacheBust: true,
+        pixelRatio: dynamicScale,
+        backgroundColor: '#f6f2ea',
+      });
+
+      if (!blob) throw new Error('Failed to create PNG blob');
+
+      // Browser safety guard for huge snapshots
+      if (blob.size > 45 * 1024 * 1024) {
+        throw new Error('Snapshot too large. Select fewer logs and try again.');
+      }
+
+      const date = new Date().toISOString().slice(0, 10);
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `coffee-tasting-snapshot-${date}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      toast.success(`Saved PNG snapshot (${selectedEntries.length})`);
+    } catch (error) {
+      console.error('PNG export error (batch snapshot):', error);
+      toast.error('Could not export PNG snapshot', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setSavingSnapshot(false);
+    }
+  };
+
   const previewContent = selectedEntries.length > 0 ? getContent(selectedFormat) : '';
   const previewLines = previewContent.split('\n').slice(0, 20);
 
   return (
     <div className="flex flex-col min-h-full pb-24">
+      {/* Off-screen snapshot canvas target */}
+      <div style={{ position: 'fixed', left: -9999, top: 0, pointerEvents: 'none', zIndex: -1 }}>
+        <div
+          ref={snapshotRef}
+          style={{
+            width: 430,
+            background: '#f6f2ea',
+            color: '#1f2937',
+            padding: 16,
+          }}
+        >
+          <div style={{ marginBottom: 10, color: '#5b4636', fontSize: 12, fontWeight: 700, letterSpacing: 0.3 }}>
+            Coffee Tasting Log Snapshot · {new Date().toLocaleDateString()}
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {selectedEntries.map(entry => (
+              <ShareCard key={entry.id} entry={entry} />
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div
         className="relative overflow-hidden px-4 pt-5 pb-5"
@@ -306,6 +399,10 @@ export default function ExportPage() {
             <div className="mt-2 bg-muted/50 rounded-lg p-3 overflow-x-auto animate-fade-slide-up">
               {selectedCount === 0 ? (
                 <p className="text-xs text-muted-foreground">Select at least one log to preview export content.</p>
+              ) : selectedFormat === 'png' ? (
+                <p className="text-xs text-muted-foreground">
+                  PNG exports a visual snapshot of selected log cards.
+                </p>
               ) : (
                 <pre className="text-[10px] text-muted-foreground font-mono-custom whitespace-pre leading-relaxed">
                   {previewLines.join('\n')}
@@ -390,7 +487,7 @@ export default function ExportPage() {
           size="sm"
           onClick={handleCopy}
           className="flex-none gap-1.5"
-          disabled={entries.length === 0 || selectedCount === 0}
+          disabled={entries.length === 0 || selectedCount === 0 || selectedFormat === 'png'}
         >
           {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
           Copy
@@ -400,10 +497,12 @@ export default function ExportPage() {
           onClick={handleExport}
           className="flex-1 gap-1.5 font-semibold"
           style={{ background: 'oklch(0.38 0.08 35)', color: 'white' }}
-          disabled={entries.length === 0 || selectedCount === 0}
+          disabled={entries.length === 0 || selectedCount === 0 || savingSnapshot}
         >
           <Download size={14} />
-          Download {FORMAT_OPTIONS.find(f => f.id === selectedFormat)?.ext.toUpperCase()} ({selectedCount})
+          {selectedFormat === 'png' && savingSnapshot
+            ? `Saving PNG… (${selectedCount})`
+            : `Download ${FORMAT_OPTIONS.find(f => f.id === selectedFormat)?.ext.toUpperCase()} (${selectedCount})`}
         </Button>
       </div>
       </div>

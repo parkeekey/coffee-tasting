@@ -28,7 +28,9 @@ interface CoffeeContextValue {
   draft: CoffeeEntry;
   setDraft: React.Dispatch<React.SetStateAction<CoffeeEntry>>;
   updateDraftScore: (key: keyof TastingScores, value: number) => void;
-  updateDraftField: (key: keyof Omit<CoffeeEntry, 'scores' | 'id' | 'createdAt' | 'updatedAt' | 'totalScore' | 'focusedAttributes'>, value: string | boolean) => void;
+  updateDraftSensoryNote: (key: keyof TastingScores, value: string) => void;
+  updateDraftSensoryReaction: (key: keyof TastingScores, value: 'like' | 'soso' | 'dislike' | '') => void;
+  updateDraftField: (key: keyof Omit<CoffeeEntry, 'scores' | 'sensoryNotes' | 'sensoryReactions' | 'id' | 'createdAt' | 'updatedAt' | 'totalScore' | 'focusedAttributes'>, value: string | boolean) => void;
   updateDraftAromaDescriptors: (descriptors: string[]) => void;
   updateDraftBrewPours: (pours: import('@/lib/coffeeTypes').BrewPour[]) => void;
   updateDraftSweetnessDescriptors: (descriptors: string[]) => void;
@@ -107,8 +109,28 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const updateDraftSensoryNote = useCallback((key: keyof TastingScores, value: string) => {
+    setDraft(prev => ({
+      ...prev,
+      sensoryNotes: {
+        ...prev.sensoryNotes,
+        [key]: value,
+      },
+    }));
+  }, []);
+
+  const updateDraftSensoryReaction = useCallback((key: keyof TastingScores, value: 'like' | 'soso' | 'dislike' | '') => {
+    setDraft(prev => ({
+      ...prev,
+      sensoryReactions: {
+        ...prev.sensoryReactions,
+        [key]: value,
+      },
+    }));
+  }, []);
+
   const updateDraftField = useCallback((
-    key: keyof Omit<CoffeeEntry, 'scores' | 'id' | 'createdAt' | 'updatedAt' | 'totalScore'>,
+    key: keyof Omit<CoffeeEntry, 'scores' | 'sensoryNotes' | 'sensoryReactions' | 'id' | 'createdAt' | 'updatedAt' | 'totalScore'>,
     value: string | boolean
   ) => {
     setDraft(prev => ({ ...prev, [key]: value }));
@@ -195,7 +217,7 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   return (
     <CoffeeContext.Provider value={{
       entries, addEntry, updateEntry, deleteEntry, toggleFavorite,
-      draft, setDraft, updateDraftScore, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors,
+      draft, setDraft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors,
       toggleFocusedAttribute,
       saveDraft, resetDraft, editEntry, isEditingExisting,
       activeTab, setActiveTab,

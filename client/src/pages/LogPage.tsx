@@ -3,8 +3,8 @@
 // Design: "Specialty Lab" — warm scientific minimalism
 // =============================================================
 
-import { useMemo, useState } from 'react';
-import { Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Camera, Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,13 +20,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { calculateExtractionYieldPercent, CoffeeEntry, estimateWaterOut, getScoreHex, getScoreLabel, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
   const [expanded, setExpanded] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const color = getScoreHex(entry.totalScore);
-  const label = getScoreLabel(entry.totalScore);
   const mode = entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
   const isTastePadEntry = mode === 'pad';
   const isBrewingEntry = mode === 'brewing';
@@ -48,8 +49,44 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
     toast.success(entry.isFavorite ? 'Removed from favorites' : 'Added to favorites ★');
   };
 
+  const handleShare = async () => {
+    if (!cardRef.current) return;
+    setSharing(true);
+    try {
+      const { toBlob } = await import('html-to-image');
+      const blob = await toBlob(cardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      });
+
+      if (!blob) throw new Error('Failed to create PNG blob');
+
+      const link = document.createElement('a');
+      const name = (entry.name || entry.sampleIndex || 'coffee').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const createdAt = new Date(entry.createdAt);
+      const datePart = Number.isNaN(createdAt.getTime())
+        ? new Date().toISOString().slice(0, 10)
+        : createdAt.toISOString().slice(0, 10);
+
+      link.download = `${name}_${datePart}.png`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast.success('Image saved!');
+    } catch (error) {
+      console.error('PNG export error (single card):', error);
+      toast.error('Could not export image', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
+      setSharing(false);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-slide-up">
+    <div ref={cardRef} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-slide-up">
+
       {/* Card header */}
       <div className="flex items-start p-3 gap-3">
         {/* Score badge */}
@@ -100,12 +137,7 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                 {[entry.origin, entry.process, entry.roastLevel].filter(Boolean).join(' · ')}
               </p>
             </div>
-            <span
-              className="text-[10px] font-medium flex-none mt-0.5 px-1.5 py-0.5 rounded-full"
-              style={{ backgroundColor: `${color}15`, color }}
-            >
-              {label}
-            </span>
+
           </div>
 
           {/* Focused attributes badges */}
@@ -152,20 +184,47 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
             {SCORE_ATTRIBUTES.map(attr => {
               const { label: lvl, color: lvlColor } = getAttributeLabel(entry.scores[attr.key]);
+              const sensoryNote = (entry.sensoryNotes?.[attr.key] ?? '').trim();
+              const reaction = entry.sensoryReactions?.[attr.key] ?? '';
               return (
-                <div key={attr.key} className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{attr.emoji} {attr.label}</span>
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="text-[9px] font-medium px-1 py-0.5 rounded"
-                      style={{ backgroundColor: `${lvlColor}18`, color: lvlColor }}
-                    >
-                      {lvl}
-                    </span>
-                    <span className="text-xs font-mono-custom font-bold text-foreground">
-                      {entry.scores[attr.key]}/9
-                    </span>
+                <div key={attr.key} className="space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{attr.emoji} {attr.label}</span>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className="text-[9px] font-medium px-1 py-0.5 rounded"
+                        style={{ backgroundColor: `${lvlColor}18`, color: lvlColor }}
+                      >
+                        {lvl}
+                      </span>
+                      <span className="text-xs font-mono-custom font-bold text-foreground">
+                        {entry.scores[attr.key]}/9
+                      </span>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-1">
+                    {reaction === 'like' && (
+                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-emerald-700 border-emerald-300 bg-emerald-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
+                        <span>👍</span>
+                        <span>Like</span>
+                      </span>
+                    )}
+                    {reaction === 'soso' && (
+                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-amber-700 border-amber-300 bg-amber-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
+                        <span>😐</span>
+                        <span>So-so</span>
+                      </span>
+                    )}
+                    {reaction === 'dislike' && (
+                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-rose-700 border-rose-300 bg-rose-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
+                        <span>👎</span>
+                        <span>Dislike</span>
+                      </span>
+                    )}
+                  </div>
+                  {sensoryNote && (
+                    <p className="text-[10px] text-muted-foreground italic">↳ {sensoryNote}</p>
+                  )}
                 </div>
               );
             })}
@@ -246,12 +305,23 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                 const dose = parseFloat(entry.brewDose ?? '');
                 const estWaterOut = estimateWaterOut(dose, entry.brewRatio ?? '');
                 const liquid = parseFloat(entry.brewYield || (estWaterOut !== null ? estWaterOut.toFixed(1) : ''));
-                const ey = calculateExtractionYieldPercent(tds, liquid, dose);
+                const ratioEy = estimateExtractionYieldFromRatioReference(entry.brewRatio ?? '', tds);
+                const quickEy = estimateExtractionYieldFromQuickGuide(entry.brewRatio ?? '', tds);
+                const ey = ratioEy ?? quickEy ?? calculateExtractionYieldPercent(tds, liquid, dose);
+                const sz = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
+                const szStyle = sz === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                  : sz === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
+                  : sz === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
+                  : 'text-muted-foreground bg-muted border-border';
+                const szLabel = sz === 'ideal' ? '✓ Ideal' : sz === 'weak' ? '💧 Weak' : sz === 'strong' ? '🔥 Strong' : null;
                 return (
                   <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
                     <span className="text-sm leading-none">🔬</span>
                     <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
                     <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
+                    {szLabel && (
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap shrink-0 leading-none ${szStyle}`}>{szLabel}</span>
+                    )}
                     {ey !== null && (
                       <>
                         <span className="text-[11px] text-muted-foreground mx-1">·</span>
@@ -270,11 +340,20 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             const liquid = parseFloat(entry.tastingLiquidMl ?? '');
             const dose = parseFloat(entry.tastingDose ?? '');
             const ey = calculateExtractionYieldPercent(tds, liquid, dose);
+            const sz = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
+            const szStyle = sz === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+              : sz === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
+              : sz === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
+              : 'text-muted-foreground bg-muted border-border';
+            const szLabel = sz === 'ideal' ? '✓ Ideal' : sz === 'weak' ? '💧 Weak' : sz === 'strong' ? '🔥 Strong' : null;
             return (
               <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
                 <span className="text-sm leading-none">🔬</span>
                 <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
                 <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
+                {szLabel && (
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap shrink-0 leading-none ${szStyle}`}>{szLabel}</span>
+                )}
                 {ey !== null && (
                   <>
                     <span className="text-[11px] text-muted-foreground mx-1">·</span>
@@ -489,6 +568,15 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <div className="w-px h-6 bg-border" />
+        <button
+          onClick={handleShare}
+          disabled={sharing}
+          className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-primary hover:bg-muted/50 transition-colors disabled:opacity-50"
+        >
+          <Camera size={12} />
+          {sharing ? 'Saving…' : 'Save Image'}
+        </button>
       </div>
     </div>
   );

@@ -16,10 +16,10 @@ import { ScoreArc } from '@/components/ScoreArc';
 import { TastingSliderWithFocus } from '@/components/TastingSliderWithFocus';
 import { BrewingRecipeSection } from '@/components/BrewingRecipeSection';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { ALTITUDE_OPTIONS, calculateExtractionYieldPercent, classifyExtractionYield, classifyTdsByRatioReference, estimateWaterOut, getQuickGuideTdsTarget, getRatioReferenceIdealWindow, PROCESS_OPTIONS, ROAST_OPTIONS, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
+import { ALTITUDE_OPTIONS, calculateExtractionYieldPercent, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByStrengthZone, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getQuickGuideTdsTarget, getRatioReferenceIdealWindow, PROCESS_OPTIONS, ROAST_OPTIONS, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
 
 export default function TastePage() {
-  const { draft, updateDraftScore, updateDraftField, toggleFocusedAttribute, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, saveDraft, resetDraft, isEditingExisting } = useCoffee();
+  const { draft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, toggleFocusedAttribute, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, saveDraft, resetDraft, isEditingExisting } = useCoffee();
   const [infoOpen, setInfoOpen] = useState(true);
   const [guideRatioInput, setGuideRatioInput] = useState('');
   const [guideEyMin, setGuideEyMin] = useState('18');
@@ -36,7 +36,7 @@ export default function TastePage() {
       toast.error('Please enter a coffee name before saving.');
       return;
     }
-    if (draft.entryMode !== 'pad' && draft.brewTDS.trim() && !tdsConfirmed) {
+    if (!isEditingExisting && draft.entryMode !== 'pad' && draft.brewTDS.trim() && !tdsConfirmed) {
       toast.error('Please confirm TDS before saving.');
       return;
     }
@@ -311,9 +311,14 @@ export default function TastePage() {
             : draft.tastingLiquidMl
         );
         const dose = parseFloat(draft.entryMode === 'brewing' ? draft.brewDose : draft.tastingDose);
-        const ey = calculateExtractionYieldPercent(tds, liquid, dose);
+        const ratioEy = Number.isFinite(tds) ? estimateExtractionYieldFromRatioReference(draft.brewRatio, tds) : null;
+        const quickEy = Number.isFinite(tds) ? estimateExtractionYieldFromQuickGuide(draft.brewRatio, tds) : null;
+        const formulaEy = calculateExtractionYieldPercent(tds, liquid, dose);
+        const ey = ratioEy ?? quickEy ?? formulaEy;
+        const eySource = ratioEy !== null ? 'sheet' : quickEy !== null ? 'quick' : 'calc';
         const ratioReference = Number.isFinite(tds) ? classifyTdsByRatioReference(draft.brewRatio, tds) : null;
         const extractionState = ratioReference ?? (ey !== null ? classifyExtractionYield(ey) : null);
+        const strengthZone = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
         const idealWindow = getRatioReferenceIdealWindow(draft.brewRatio);
         const activeGuideRatio = (guideRatioInput.trim() || draft.brewRatio || '13').trim();
         const minEy = Math.min(30, Math.max(10, parseInt(guideEyMin || '18', 10) || 18));
@@ -339,6 +344,16 @@ export default function TastePage() {
                   <span className="text-white text-sm leading-none">🔬</span>
                 </div>
                 <p className="text-xs font-semibold text-cyan-900">TDS &amp; Extraction Yield</p>
+                {strengthZone && (
+                  <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    strengthZone === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                    : strengthZone === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
+                    : strengthZone === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
+                    : 'text-muted-foreground bg-muted border-border'
+                  }`}>
+                    {strengthZone === 'ideal' ? '✓ Ideal Strength' : strengthZone === 'weak' ? '💧 Weak' : strengthZone === 'strong' ? '🔥 Strong' : '— Out of range'}
+                  </span>
+                )}
               </div>
               {/* Inputs */}
               <div className="grid grid-cols-3 gap-2">
@@ -400,7 +415,7 @@ export default function TastePage() {
               {ey !== null && extractionState ? (
                 <div className="space-y-2">
                   <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${tone.bg} ${tone.border}`}>
-                    <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">Extraction Yield</span>
+                    <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">Extraction Yield ({eySource})</span>
                     <span className={`text-lg font-bold font-mono-custom ${tone.color}`}>{ey.toFixed(1)}%</span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>
                       {extractionState.tier === 'under' ? 'Under' : extractionState.tier === 'ideal' ? 'Ideal' : extractionState.tier === 'fail' ? 'Fail' : 'Over'}
@@ -421,7 +436,7 @@ export default function TastePage() {
               ) : (
                 <p className="text-[11px] text-cyan-600">
                   {draft.entryMode === 'brewing'
-                    ? 'Fill in TDS + Dose + Yield in the recipe to calculate EY'
+                    ? 'Fill in TDS + Ratio to estimate EY (sheet first, then Quick EXT fallback)'
                     : 'Fill in TDS, Liquid volume and Dose to calculate Extraction Yield'}
                 </p>
               )}
@@ -541,6 +556,10 @@ export default function TastePage() {
               description={attr.description}
               value={draft.scores[attr.key]}
               onChange={v => updateDraftScore(attr.key, v)}
+              note={draft.sensoryNotes[attr.key]}
+              onNoteChange={v => updateDraftSensoryNote(attr.key, v)}
+              reaction={draft.sensoryReactions[attr.key]}
+              onReactionChange={v => updateDraftSensoryReaction(attr.key, v)}
               isFocused={draft.focusedAttributes.includes(attr.key)}
               onFocusToggle={() => toggleFocusedAttribute(attr.key)}
               aromaDescriptors={attr.key === 'aroma' ? draft.aromaDescriptors : undefined}
@@ -559,8 +578,8 @@ export default function TastePage() {
               onMouthfeelDescriptorsChange={attr.key === 'mouthfeel' ? updateDraftMouthfeelDescriptors : undefined}
               aftertasteDescriptors={attr.key === 'aftertaste' ? draft.aftertasteDescriptors : undefined}
               onAftertasteDescriptorsChange={attr.key === 'aftertaste' ? updateDraftAftertasteDescriptors : undefined}
-              overallDescriptors={attr.key === 'overall' ? draft.overallDescriptors : undefined}
-              onOverallDescriptorsChange={attr.key === 'overall' ? updateDraftOverallDescriptors : undefined}
+              overallDescriptors={attr.key === 'flavor' ? draft.overallDescriptors : undefined}
+              onOverallDescriptorsChange={attr.key === 'flavor' ? updateDraftOverallDescriptors : undefined}
             />
           ))}
         </div>
@@ -576,9 +595,6 @@ export default function TastePage() {
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Range</p>
             <p className="text-xs text-foreground">55 (min) → 100 (max)</p>
-            <p className="text-xs font-medium mt-0.5" style={{ color: draft.totalScore >= 85 ? '#4a7c59' : draft.totalScore >= 75 ? '#d4860a' : '#e67e22' }}>
-              {draft.totalScore < 70 ? 'Below Specialty' : draft.totalScore < 75 ? 'Specialty' : draft.totalScore < 80 ? 'Very Good' : draft.totalScore < 85 ? 'Excellent' : draft.totalScore < 90 ? 'Outstanding' : 'Extraordinary'}
-            </p>
           </div>
         </div>
       </div>
