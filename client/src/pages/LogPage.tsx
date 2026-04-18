@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { calculateExtractionYieldPercent, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
@@ -308,19 +308,33 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                 const ratioEy = estimateExtractionYieldFromRatioReference(entry.brewRatio ?? '', tds);
                 const quickEy = estimateExtractionYieldFromQuickGuide(entry.brewRatio ?? '', tds);
                 const ey = ratioEy ?? quickEy ?? calculateExtractionYieldPercent(tds, liquid, dose);
-                const sz = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
+                const extractionState = classifyTdsByRatioReference(entry.brewRatio ?? '', tds) ?? (ey !== null ? classifyExtractionYield(ey) : null);
+                const combined = extractionState ? classifyCombinedExtractionReport(entry.brewRatio ?? '', tds, extractionState.tier) : null;
+                const sz = Number.isFinite(tds) ? classifyTdsByRatioStrengthZone(entry.brewRatio ?? '', tds) : null;
                 const szStyle = sz === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                  : sz === 'ideal-zone' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
                   : sz === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
                   : sz === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
                   : 'text-muted-foreground bg-muted border-border';
-                const szLabel = sz === 'ideal' ? '✓ Ideal' : sz === 'weak' ? '💧 Weak' : sz === 'strong' ? '🔥 Strong' : null;
+                const szIcon = (sz === 'ideal' || sz === 'ideal-zone') ? '✓' : sz === 'weak' ? '💧' : sz === 'strong' ? '🔥' : null;
+                const szLabel = (sz === 'ideal' || sz === 'ideal-zone') ? 'Ideal Zone' : sz === 'weak' ? 'Weak' : sz === 'strong' ? 'Strong' : null;
+                const combinedStyle = combined?.extractionTier === 'ideal'
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                  : combined?.extractionTier === 'under'
+                    ? 'text-amber-700 bg-amber-50 border-amber-300'
+                    : combined?.extractionTier === 'over'
+                      ? 'text-rose-700 bg-rose-50 border-rose-300'
+                      : 'text-violet-700 bg-violet-50 border-violet-300';
                 return (
                   <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
                     <span className="text-sm leading-none">🔬</span>
                     <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
                     <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
                     {szLabel && (
-                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap shrink-0 leading-none ${szStyle}`}>{szLabel}</span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 min-w-max leading-none ${szStyle}`}>
+                        <span className="leading-none">{szIcon}</span>
+                        <span className="leading-none">{szLabel}</span>
+                      </span>
                     )}
                     {ey !== null && (
                       <>
@@ -328,6 +342,11 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                         <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">EY</span>
                         <span className="text-sm font-bold font-mono-custom text-cyan-900">{ey.toFixed(1)}%</span>
                       </>
+                    )}
+                    {combined && (
+                      <span className={`ml-auto text-[9px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap ${combinedStyle}`}>
+                        {combined.label}
+                      </span>
                     )}
                   </div>
                 );
@@ -340,19 +359,33 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             const liquid = parseFloat(entry.tastingLiquidMl ?? '');
             const dose = parseFloat(entry.tastingDose ?? '');
             const ey = calculateExtractionYieldPercent(tds, liquid, dose);
-            const sz = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
+            const extractionState = classifyTdsByRatioReference(entry.brewRatio ?? '', tds) ?? (ey !== null ? classifyExtractionYield(ey) : null);
+            const combined = extractionState ? classifyCombinedExtractionReport(entry.brewRatio ?? '', tds, extractionState.tier) : null;
+            const sz = Number.isFinite(tds) ? classifyTdsByRatioStrengthZone(entry.brewRatio ?? '', tds) : null;
             const szStyle = sz === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+              : sz === 'ideal-zone' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
               : sz === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
               : sz === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
               : 'text-muted-foreground bg-muted border-border';
-            const szLabel = sz === 'ideal' ? '✓ Ideal' : sz === 'weak' ? '💧 Weak' : sz === 'strong' ? '🔥 Strong' : null;
+            const szIcon = (sz === 'ideal' || sz === 'ideal-zone') ? '✓' : sz === 'weak' ? '💧' : sz === 'strong' ? '🔥' : null;
+            const szLabel = (sz === 'ideal' || sz === 'ideal-zone') ? 'Ideal Zone' : sz === 'weak' ? 'Weak' : sz === 'strong' ? 'Strong' : null;
+            const combinedStyle = combined?.extractionTier === 'ideal'
+              ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+              : combined?.extractionTier === 'under'
+                ? 'text-amber-700 bg-amber-50 border-amber-300'
+                : combined?.extractionTier === 'over'
+                  ? 'text-rose-700 bg-rose-50 border-rose-300'
+                  : 'text-violet-700 bg-violet-50 border-violet-300';
             return (
               <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border-2 border-cyan-300 bg-cyan-50">
                 <span className="text-sm leading-none">🔬</span>
                 <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">TDS</span>
                 <span className="text-sm font-bold text-cyan-800 font-mono-custom">{entry.brewTDS}%</span>
                 {szLabel && (
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap shrink-0 leading-none ${szStyle}`}>{szLabel}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 whitespace-nowrap shrink-0 min-w-max leading-none ${szStyle}`}>
+                    <span className="leading-none">{szIcon}</span>
+                    <span className="leading-none">{szLabel}</span>
+                  </span>
                 )}
                 {ey !== null && (
                   <>
@@ -360,6 +393,11 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                     <span className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">EY</span>
                     <span className="text-sm font-bold font-mono-custom text-cyan-900">{ey.toFixed(1)}%</span>
                   </>
+                )}
+                {combined && (
+                  <span className={`ml-auto text-[9px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center whitespace-nowrap ${combinedStyle}`}>
+                    {combined.label}
+                  </span>
                 )}
               </div>
             );

@@ -16,7 +16,7 @@ import { ScoreArc } from '@/components/ScoreArc';
 import { TastingSliderWithFocus } from '@/components/TastingSliderWithFocus';
 import { BrewingRecipeSection } from '@/components/BrewingRecipeSection';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { ALTITUDE_OPTIONS, calculateExtractionYieldPercent, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByStrengthZone, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getQuickGuideTdsTarget, getRatioReferenceIdealWindow, PROCESS_OPTIONS, ROAST_OPTIONS, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
+import { ALTITUDE_OPTIONS, calculateExtractionYieldPercent, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getQuickGuideTdsTarget, getRatioReferenceIdealWindow, PROCESS_OPTIONS, ROAST_OPTIONS, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
 
 export default function TastePage() {
   const { draft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, toggleFocusedAttribute, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, saveDraft, resetDraft, isEditingExisting } = useCoffee();
@@ -318,8 +318,16 @@ export default function TastePage() {
         const eySource = ratioEy !== null ? 'sheet' : quickEy !== null ? 'quick' : 'calc';
         const ratioReference = Number.isFinite(tds) ? classifyTdsByRatioReference(draft.brewRatio, tds) : null;
         const extractionState = ratioReference ?? (ey !== null ? classifyExtractionYield(ey) : null);
-        const strengthZone = Number.isFinite(tds) ? classifyTdsByStrengthZone(tds) : null;
+        const strengthZone = Number.isFinite(tds)
+          ? (draft.entryMode === 'brewing'
+            ? classifyTdsByRatioStrengthZone(draft.brewRatio, tds)
+            : classifyTdsByStrengthZone(tds))
+          : null;
+        const combinedReport = (Number.isFinite(tds) && extractionState)
+          ? classifyCombinedExtractionReport(draft.brewRatio, tds, extractionState.tier)
+          : null;
         const idealWindow = getRatioReferenceIdealWindow(draft.brewRatio);
+        const ratioText = (draft.brewRatio ?? '').trim();
         const activeGuideRatio = (guideRatioInput.trim() || draft.brewRatio || '13').trim();
         const minEy = Math.min(30, Math.max(10, parseInt(guideEyMin || '18', 10) || 18));
         const maxEy = Math.min(30, Math.max(minEy, parseInt(guideEyMax || '22', 10) || 22));
@@ -344,14 +352,19 @@ export default function TastePage() {
                   <span className="text-white text-sm leading-none">🔬</span>
                 </div>
                 <p className="text-xs font-semibold text-cyan-900">TDS &amp; Extraction Yield</p>
+                {draft.entryMode === 'brewing' && ratioText && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-cyan-300 bg-white text-cyan-800 whitespace-nowrap">
+                    Ratio 1:{ratioText}
+                  </span>
+                )}
                 {strengthZone && (
                   <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                    strengthZone === 'ideal' ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                    (strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
                     : strengthZone === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
                     : strengthZone === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
                     : 'text-muted-foreground bg-muted border-border'
                   }`}>
-                    {strengthZone === 'ideal' ? '✓ Ideal Strength' : strengthZone === 'weak' ? '💧 Weak' : strengthZone === 'strong' ? '🔥 Strong' : '— Out of range'}
+                    {(strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? '✓ Ideal Zone' : strengthZone === 'weak' ? '💧 Weak' : strengthZone === 'strong' ? '🔥 Strong' : '— Out of range'}
                   </span>
                 )}
               </div>
@@ -418,7 +431,7 @@ export default function TastePage() {
                     <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">Extraction Yield ({eySource})</span>
                     <span className={`text-lg font-bold font-mono-custom ${tone.color}`}>{ey.toFixed(1)}%</span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>
-                      {extractionState.tier === 'under' ? 'Under' : extractionState.tier === 'ideal' ? 'Ideal' : extractionState.tier === 'fail' ? 'Fail' : 'Over'}
+                      {combinedReport?.label ?? (extractionState.tier === 'under' ? 'Under' : extractionState.tier === 'ideal' ? 'Ideal' : extractionState.tier === 'fail' ? 'Fail' : 'Over')}
                     </span>
                     <span className={`ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>{extractionState.label}</span>
                   </div>
@@ -431,6 +444,13 @@ export default function TastePage() {
                       {extractionState.tier === 'over' && 'Try coarser grind, shorter contact time, or lower target EY. If flavor is excellent, trust your cup.'}
                       {extractionState.tier === 'fail' && 'Reading exceeds reference range. Re-check TDS reading and brew inputs, then judge by cup quality.'}
                     </p>
+                    {draft.entryMode === 'brewing' && idealWindow && Number.isFinite(tds) && (
+                      <p className="text-[11px] text-cyan-900 mt-1">
+                        Status: <span className="font-semibold">{combinedReport?.label ?? '—'}</span> ·
+                        For 1:{idealWindow.ratio}, target TDS for SCA ideal is <span className="font-semibold">{idealWindow.min.toFixed(2)}–{idealWindow.max.toFixed(2)}%</span>
+                        {tds < idealWindow.min ? ' (raise TDS)' : tds > idealWindow.max ? ' (lower TDS)' : ' (inside ideal window)'}.
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (

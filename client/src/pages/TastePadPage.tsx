@@ -41,6 +41,24 @@ const INITIAL_TAPS: Record<PadScoreKey, TapLevel> = {
   overall: EMPTY_TAP,
 };
 
+type PadCupState = {
+  sampleName: string;
+  sampleCode: string;
+  notes: string;
+  taps: Record<PadScoreKey, TapLevel>;
+  focusedAttributes: Set<PadScoreKey>;
+};
+
+function createInitialCupState(): PadCupState {
+  return {
+    sampleName: '',
+    sampleCode: '',
+    notes: '',
+    taps: { ...INITIAL_TAPS },
+    focusedAttributes: new Set<PadScoreKey>(),
+  };
+}
+
 function levelLabel(level: TapLevel) {
   if (level === 0) return 'None';
   if (level === 1) return 'Low';
@@ -118,64 +136,86 @@ export default function TastePadPage() {
   const { entries, addEntry, setActiveTab } = useCoffee();
 
   const [blindMode, setBlindMode] = useState(true);
-  const [sampleName, setSampleName] = useState('');
-  const [sampleCode, setSampleCode] = useState('');
+  const [cupCount, setCupCount] = useState(1);
+  const [activeCupIndex, setActiveCupIndex] = useState(0);
+  const [cups, setCups] = useState<PadCupState[]>([createInitialCupState()]);
 
   const [origin, setOrigin] = useState('');
   const [process, setProcess] = useState(PROCESS_OPTIONS[0]);
   const [altitude, setAltitude] = useState(ALTITUDE_OPTIONS[2]);
   const [roastLevel, setRoastLevel] = useState(ROAST_OPTIONS[2]);
   const [roaster, setRoaster] = useState('');
-  const [notes, setNotes] = useState('');
+  const activeCup = cups[activeCupIndex] ?? createInitialCupState();
 
-  const [taps, setTaps] = useState<Record<PadScoreKey, TapLevel>>(INITIAL_TAPS);
-  const [focusedAttributes, setFocusedAttributes] = useState<Set<PadScoreKey>>(new Set());
-
-  const toggleFocusAttribute = (attr: PadScoreKey) => {
-    const updated = new Set(focusedAttributes);
-    if (updated.has(attr)) {
-      updated.delete(attr);
-    } else {
-      updated.add(attr);
-    }
-    setFocusedAttributes(updated);
+  const updateCup = (index: number, updater: (prev: PadCupState) => PadCupState) => {
+    setCups(prev => prev.map((cup, i) => (i === index ? updater(cup) : cup)));
   };
 
-  const isFocused = (attr: PadScoreKey) => focusedAttributes.has(attr);
+  const setCupCountSafe = (count: number) => {
+    const clamped = Math.max(1, Math.min(12, count));
+    setCupCount(clamped);
+    setCups(prev => {
+      if (prev.length === clamped) return prev;
+      if (prev.length > clamped) return prev.slice(0, clamped);
+      return [...prev, ...Array.from({ length: clamped - prev.length }, () => createInitialCupState())];
+    });
+    setActiveCupIndex(prev => Math.min(prev, clamped - 1));
+  };
+
+  const toggleFocusAttribute = (attr: PadScoreKey) => {
+    updateCup(activeCupIndex, (cup) => {
+      const updated = new Set(cup.focusedAttributes);
+      if (updated.has(attr)) updated.delete(attr);
+      else updated.add(attr);
+      return { ...cup, focusedAttributes: updated };
+    });
+  };
+
+  const isFocused = (attr: PadScoreKey) => activeCup.focusedAttributes.has(attr);
 
   const setTap = (key: PadScoreKey, next: TapLevel) => {
-    setTaps(prev => ({ ...prev, [key]: next }));
+    updateCup(activeCupIndex, (cup) => ({ ...cup, taps: { ...cup.taps, [key]: next } }));
   };
 
   const cycleTap = (key: PadScoreKey) => {
-    setTaps(prev => ({
-      ...prev,
-      [key]: (prev[key] === 3 ? 0 : (prev[key] + 1)) as TapLevel,
+    updateCup(activeCupIndex, (cup) => ({
+      ...cup,
+      taps: {
+        ...cup.taps,
+        [key]: (cup.taps[key] === 3 ? 0 : (cup.taps[key] + 1)) as TapLevel,
+      },
     }));
   };
 
   const increase = (key: PadScoreKey) => {
-    setTaps(prev => ({ ...prev, [key]: Math.min(3, prev[key] + 1) as TapLevel }));
+    updateCup(activeCupIndex, (cup) => ({
+      ...cup,
+      taps: { ...cup.taps, [key]: Math.min(3, cup.taps[key] + 1) as TapLevel },
+    }));
   };
 
   const decrease = (key: PadScoreKey) => {
-    setTaps(prev => ({ ...prev, [key]: Math.max(1, prev[key] - 1) as TapLevel }));
+    updateCup(activeCupIndex, (cup) => ({
+      ...cup,
+      taps: { ...cup.taps, [key]: Math.max(1, cup.taps[key] - 1) as TapLevel },
+    }));
   };
 
   const resetOne = (key: PadScoreKey) => setTap(key, MEDIUM_TAP);
 
   const mappedScores: TastingScores = useMemo(() => ({
-    fragrance: TAP_TO_SCORE[taps.fragrance],
-    aroma: TAP_TO_SCORE[taps.aroma],
-    acidity: TAP_TO_SCORE[taps.acidity],
-    sweetness: TAP_TO_SCORE[taps.sweetness],
-    mouthfeel: TAP_TO_SCORE[taps.mouthfeel],
-    aftertaste: TAP_TO_SCORE[taps.aftertaste],
-    flavor: TAP_TO_SCORE[taps.flavor], // intensity
-    overall: TAP_TO_SCORE[taps.overall], // clarity
-  }), [taps]);
+    fragrance: TAP_TO_SCORE[activeCup.taps.fragrance],
+    aroma: TAP_TO_SCORE[activeCup.taps.aroma],
+    acidity: TAP_TO_SCORE[activeCup.taps.acidity],
+    sweetness: TAP_TO_SCORE[activeCup.taps.sweetness],
+    mouthfeel: TAP_TO_SCORE[activeCup.taps.mouthfeel],
+    aftertaste: TAP_TO_SCORE[activeCup.taps.aftertaste],
+    flavor: TAP_TO_SCORE[activeCup.taps.flavor], // intensity
+    overall: TAP_TO_SCORE[activeCup.taps.overall], // clarity
+  }), [activeCup.taps]);
 
-  const hasUnassigned = Object.values(taps).some(value => value === 0);
+  const hasUnassigned = Object.values(activeCup.taps).some(value => value === 0);
+  const hasUnassignedAnyCup = cups.slice(0, cupCount).some(cup => Object.values(cup.taps).some(value => value === 0));
 
   const effectiveScores: TastingScores = useMemo(() => ({
     fragrance: mappedScores.fragrance || 6,
@@ -195,10 +235,8 @@ export default function TastePadPage() {
   const y = ((effectiveScores.mouthfeel - effectiveScores.aftertaste) / 6) * 44; // -44 to +44
 
   const resetAll = () => {
-    setTaps(INITIAL_TAPS);
-    setSampleName('');
-    setSampleCode('');
-    setNotes('');
+    setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
+    setActiveCupIndex(0);
     if (!blindMode) {
       setOrigin('');
       setProcess(PROCESS_OPTIONS[0]);
@@ -210,82 +248,92 @@ export default function TastePadPage() {
   };
 
   const handleSave = () => {
-    if (!sampleName.trim()) {
-      toast.error('Please enter a sample name before saving.');
-      return;
-    }
-
-    if (hasUnassigned) {
-      toast.error('Please tap all attributes first. None values cannot be saved yet.');
+    const workingCups = cups.slice(0, cupCount);
+    const firstIncompleteCup = workingCups.findIndex(cup => Object.values(cup.taps).some(v => v === 0));
+    if (firstIncompleteCup !== -1) {
+      toast.error(`Cup ${firstIncompleteCup + 1}: assign all attributes first.`);
+      setActiveCupIndex(firstIncompleteCup);
       return;
     }
 
     const now = new Date().toISOString();
     const nextIndex = entries.length + 1;
 
-    const entry: CoffeeEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      sampleIndex: sampleCode.trim() || `S-${String(nextIndex).padStart(2, '0')}`,
-      entryMode: 'pad',
-      isBlindMode: blindMode,
-      name: sampleName.trim(),
-      origin: blindMode ? '' : origin.trim(),
-      process: blindMode ? PROCESS_OPTIONS[0] : process,
-      altitude: blindMode ? ALTITUDE_OPTIONS[2] : altitude,
-      roastLevel: blindMode ? ROAST_OPTIONS[2] : roastLevel,
-      roaster: blindMode ? '' : roaster.trim(),
-      brewMethod: '',
-      brewDose: '',
-      brewRatio: '',
-      brewWaterIn: '',
-      brewYield: '',
-      brewTemp: '',
-      brewTime: '',
-      brewTDS: '',
-      brewWater: '',
-      brewGrinder: '',
-      brewGrindLevel: '',
-      brewGrindClicks: '',
-      brewGrindMicrons: '',
-      brewGrindSize: '',
-      brewPours: [],
-      brewRecipeNotes: '',
-      tastingLiquidMl: '',
-      tastingDose: '',
-      notes: [
-        blindMode ? '[TastePad][Blind Mode]' : '[TastePad]',
-        `Acidity↔Sweetness: ${mappedScores.acidity}/${mappedScores.sweetness}`,
-        `Mouthfeel↕Aftertaste: ${mappedScores.mouthfeel}/${mappedScores.aftertaste}`,
-        `Fragrance/Aroma: ${mappedScores.fragrance}/${mappedScores.aroma}`,
-        `Intensity/Clarity: ${mappedScores.flavor}/${mappedScores.overall}`,
-        notes.trim(),
-      ].filter(Boolean).join('\n'),
-      scores: mappedScores,
-      totalScore: totalScore ?? calculateTotalScore(mappedScores),
-      isFavorite: false,
-      focusedAttributes: [],
-      aromaDescriptors: [],
-      sweetnessDescriptors: [],
-      sweetnessDetailDescriptors: [],
-      acidityDescriptors: [],
-      acidityTypeDescriptors: [],
-      intensityDescriptors: [],
-      mouthfeelDescriptors: [],
-      aftertasteDescriptors: [],
-      overallDescriptors: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const builtEntries: CoffeeEntry[] = workingCups.map((cup, idx) => {
+      const cupScores: TastingScores = {
+        fragrance: TAP_TO_SCORE[cup.taps.fragrance],
+        aroma: TAP_TO_SCORE[cup.taps.aroma],
+        acidity: TAP_TO_SCORE[cup.taps.acidity],
+        sweetness: TAP_TO_SCORE[cup.taps.sweetness],
+        mouthfeel: TAP_TO_SCORE[cup.taps.mouthfeel],
+        aftertaste: TAP_TO_SCORE[cup.taps.aftertaste],
+        flavor: TAP_TO_SCORE[cup.taps.flavor],
+        overall: TAP_TO_SCORE[cup.taps.overall],
+      };
+      const cupTotal = calculateTotalScore(cupScores);
+      const cupName = cup.sampleName.trim() || `Cup ${idx + 1}`;
 
-    addEntry(entry);
-    toast.success('Taste Pad saved to log!', {
-      description: `${entry.sampleIndex} — ${entry.name} (${entry.totalScore.toFixed(1)}/100)`,
+      return {
+        id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+        sampleIndex: cup.sampleCode.trim() || `S-${String(nextIndex + idx).padStart(2, '0')}`,
+        entryMode: 'pad',
+        isBlindMode: blindMode,
+        name: cupName,
+        origin: blindMode ? '' : origin.trim(),
+        process: blindMode ? PROCESS_OPTIONS[0] : process,
+        altitude: blindMode ? ALTITUDE_OPTIONS[2] : altitude,
+        roastLevel: blindMode ? ROAST_OPTIONS[2] : roastLevel,
+        roaster: blindMode ? '' : roaster.trim(),
+        brewMethod: '',
+        brewDose: '',
+        brewRatio: '',
+        brewWaterIn: '',
+        brewYield: '',
+        brewTemp: '',
+        brewTime: '',
+        brewTDS: '',
+        brewWater: '',
+        brewGrinder: '',
+        brewGrindLevel: '',
+        brewGrindClicks: '',
+        brewGrindMicrons: '',
+        brewGrindSize: '',
+        brewPours: [],
+        brewRecipeNotes: '',
+        tastingLiquidMl: '',
+        tastingDose: '',
+        notes: [
+          blindMode ? '[TastePad][Blind Mode]' : '[TastePad]',
+          `[Cup ${idx + 1}/${cupCount}]`,
+          `Acidity↔Sweetness: ${cupScores.acidity}/${cupScores.sweetness}`,
+          `Mouthfeel↕Aftertaste: ${cupScores.mouthfeel}/${cupScores.aftertaste}`,
+          `Fragrance/Aroma: ${cupScores.fragrance}/${cupScores.aroma}`,
+          `Intensity/Clarity: ${cupScores.flavor}/${cupScores.overall}`,
+          cup.notes.trim(),
+        ].filter(Boolean).join('\n'),
+        scores: cupScores,
+        totalScore: cupTotal,
+        isFavorite: false,
+        focusedAttributes: Array.from(cup.focusedAttributes),
+        aromaDescriptors: [],
+        sweetnessDescriptors: [],
+        sweetnessDetailDescriptors: [],
+        acidityDescriptors: [],
+        acidityTypeDescriptors: [],
+        intensityDescriptors: [],
+        mouthfeelDescriptors: [],
+        aftertasteDescriptors: [],
+        overallDescriptors: [],
+        createdAt: now,
+        updatedAt: now,
+      };
     });
 
-    setTaps(INITIAL_TAPS);
-    setSampleName('');
-    setSampleCode('');
-    setNotes('');
+    builtEntries.forEach(addEntry);
+    toast.success(`Taste Pad saved ${builtEntries.length} cup${builtEntries.length > 1 ? 's' : ''} to log!`);
+
+    setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
+    setActiveCupIndex(0);
     setActiveTab('log');
   };
 
@@ -298,8 +346,46 @@ export default function TastePadPage() {
             <p className="text-xs text-muted-foreground mt-0.5">Tap-based quick sensory mapping</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Mapped total</p>
+            <p className="text-[10px] text-muted-foreground">Cup {activeCupIndex + 1} total</p>
             <p className="font-mono-custom font-bold text-base text-primary">{totalScore === null ? '— / 100' : `${totalScore.toFixed(1)}/100`}</p>
+          </div>
+        </div>
+
+        <div className="mt-2 rounded-lg border border-border p-2.5">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-xs font-semibold text-foreground">Cup Session</p>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground">Cups</span>
+              <Select value={String(cupCount)} onValueChange={(v) => setCupCountSafe(parseInt(v, 10))}>
+                <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                    <SelectItem key={n} value={String(n)} className="text-xs">{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+            {Array.from({ length: cupCount }, (_, i) => {
+              const cup = cups[i] ?? createInitialCupState();
+              const done = !Object.values(cup.taps).some(v => v === 0);
+              return (
+                <button
+                  key={i}
+                  onClick={() => setActiveCupIndex(i)}
+                  className={`h-7 px-2.5 rounded-full border text-[11px] font-semibold whitespace-nowrap transition-colors ${
+                    i === activeCupIndex
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : done
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-white text-muted-foreground border-border hover:bg-muted/40'
+                  }`}
+                >
+                  Cup {i + 1}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -340,14 +426,14 @@ export default function TastePadPage() {
 
         <div className="grid grid-cols-2 gap-2 mt-3">
           <Input
-            value={sampleName}
-            onChange={e => setSampleName(e.target.value)}
+            value={activeCup.sampleName}
+            onChange={e => updateCup(activeCupIndex, cup => ({ ...cup, sampleName: e.target.value }))}
             placeholder="Sample name (required)"
             className="h-9 text-sm"
           />
           <Input
-            value={sampleCode}
-            onChange={e => setSampleCode(e.target.value)}
+            value={activeCup.sampleCode}
+            onChange={e => updateCup(activeCupIndex, cup => ({ ...cup, sampleCode: e.target.value }))}
             placeholder="Sample code (optional)"
             className="h-9 text-sm font-mono-custom"
           />
@@ -386,8 +472,8 @@ export default function TastePadPage() {
               </SelectContent>
             </Select>
             <Textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
+              value={activeCup.notes}
+              onChange={e => updateCup(activeCupIndex, cup => ({ ...cup, notes: e.target.value }))}
               placeholder="Quick notes"
               className="text-sm resize-none h-9 min-h-9 py-2 col-span-1"
               rows={1}
@@ -405,8 +491,8 @@ export default function TastePadPage() {
 
         {/* Top row */}
         <div className="grid grid-cols-2 gap-2">
-          <GestureButton label="Fragrance" hint="Top row" emoji="🌸" tap={taps.fragrance} onTap={() => cycleTap('fragrance')} onDecrease={() => decrease('fragrance')} onReset={() => resetOne('fragrance')} isFocused={isFocused('fragrance')} />
-          <GestureButton label="Aroma" hint="Top row" emoji="👃" tap={taps.aroma} onTap={() => cycleTap('aroma')} onDecrease={() => decrease('aroma')} onReset={() => resetOne('aroma')} isFocused={isFocused('aroma')} />
+          <GestureButton label="Fragrance" hint="Top row" emoji="🌸" tap={activeCup.taps.fragrance} onTap={() => cycleTap('fragrance')} onDecrease={() => decrease('fragrance')} onReset={() => resetOne('fragrance')} isFocused={isFocused('fragrance')} />
+          <GestureButton label="Aroma" hint="Top row" emoji="👃" tap={activeCup.taps.aroma} onTap={() => cycleTap('aroma')} onDecrease={() => decrease('aroma')} onReset={() => resetOne('aroma')} isFocused={isFocused('aroma')} />
         </div>
 
         {/* Cross map */}
@@ -426,7 +512,7 @@ export default function TastePadPage() {
               }`}
             >
               <span>☕ Mouthfeel</span>
-              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.mouthfeel]}/9 {levelLabel(taps.mouthfeel)}</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[activeCup.taps.mouthfeel]}/9 {levelLabel(activeCup.taps.mouthfeel)}</span>
             </button>
 
             <button
@@ -438,7 +524,7 @@ export default function TastePadPage() {
               }`}
             >
               <span>✨ Aftertaste</span>
-              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.aftertaste]}/9 {levelLabel(taps.aftertaste)}</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[activeCup.taps.aftertaste]}/9 {levelLabel(activeCup.taps.aftertaste)}</span>
             </button>
 
             <button
@@ -450,7 +536,7 @@ export default function TastePadPage() {
               }`}
             >
               <span>🍋 Acidity</span>
-              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.acidity]}/9 {levelLabel(taps.acidity)}</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[activeCup.taps.acidity]}/9 {levelLabel(activeCup.taps.acidity)}</span>
             </button>
 
             <button
@@ -462,7 +548,7 @@ export default function TastePadPage() {
               }`}
             >
               <span>🍬 Sweetness</span>
-              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[taps.sweetness]}/9 {levelLabel(taps.sweetness)}</span>
+              <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[activeCup.taps.sweetness]}/9 {levelLabel(activeCup.taps.sweetness)}</span>
             </button>
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[140px] h-[140px] rounded-xl bg-muted/40 border border-border overflow-hidden z-0">
@@ -505,8 +591,8 @@ export default function TastePadPage() {
 
         {/* Bottom row */}
         <div className="grid grid-cols-2 gap-2">
-          <GestureButton label="Intensity" hint="Bottom row · maps to Flavor" emoji="⚡" tap={taps.flavor} onTap={() => cycleTap('flavor')} onDecrease={() => decrease('flavor')} onReset={() => resetOne('flavor')} isFocused={isFocused('flavor')} />
-          <GestureButton label="Clarity" hint="Bottom row · maps to Overall" emoji="🫧" tap={taps.overall} onTap={() => cycleTap('overall')} onDecrease={() => decrease('overall')} onReset={() => resetOne('overall')} isFocused={isFocused('overall')} />
+          <GestureButton label="Intensity" hint="Bottom row · maps to Flavor" emoji="⚡" tap={activeCup.taps.flavor} onTap={() => cycleTap('flavor')} onDecrease={() => decrease('flavor')} onReset={() => resetOne('flavor')} isFocused={isFocused('flavor')} />
+          <GestureButton label="Clarity" hint="Bottom row · maps to Overall" emoji="🫧" tap={activeCup.taps.overall} onTap={() => cycleTap('overall')} onDecrease={() => decrease('overall')} onReset={() => resetOne('overall')} isFocused={isFocused('overall')} />
         </div>
       </div>
 
@@ -526,10 +612,10 @@ export default function TastePadPage() {
             onClick={handleSave}
             className="flex-1 gap-1.5 font-semibold"
             style={{ background: 'oklch(0.38 0.08 35)', color: 'white' }}
-            disabled={hasUnassigned}
+            disabled={hasUnassignedAnyCup}
           >
             <Save size={14} />
-            {hasUnassigned ? 'Assign All First' : 'Save to Log'}
+            {hasUnassignedAnyCup ? 'Assign All Cups First' : `Save ${cupCount} Cup${cupCount > 1 ? 's' : ''} to Log`}
           </Button>
         </div>
       </div>

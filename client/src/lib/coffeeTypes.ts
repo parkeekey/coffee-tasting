@@ -459,11 +459,68 @@ export function classifyTdsByRatioReference(ratioText: string, tdsPercent: numbe
 
 export type TdsStrengthZone = 'weak' | 'ideal' | 'strong' | 'out-of-range';
 
+export type RatioAwareStrengthZone = 'weak' | 'ideal-zone' | 'strong' | 'out-of-range';
+
+export type CombinedExtractionReport = {
+  strengthZone: RatioAwareStrengthZone;
+  extractionTier: ExtractionTier;
+  label: string;
+};
+
 export function classifyTdsByStrengthZone(tdsPercent: number): TdsStrengthZone {
   if (tdsPercent >= 0.90 && tdsPercent < 1.15) return 'weak';
   if (tdsPercent >= 1.15 && tdsPercent <= 1.45) return 'ideal';
   if (tdsPercent > 1.45 && tdsPercent <= 1.80) return 'strong';
   return 'out-of-range';
+}
+
+export function classifyTdsByRatioStrengthZone(ratioText: string, tdsPercent: number): RatioAwareStrengthZone {
+  const ratio = parseReferenceRatio(ratioText);
+  if (ratio === null || !Number.isFinite(tdsPercent)) {
+    const fallback = classifyTdsByStrengthZone(tdsPercent);
+    if (fallback === 'ideal') return 'ideal-zone';
+    return fallback;
+  }
+
+  const row = RATIO_TDS_REFERENCE[ratio];
+  if (!row) return 'out-of-range';
+
+  // Ratio-aware strength: center around SCA ideal window for this ratio.
+  // weak   : below ideal window start
+  // ideal  : in 20-22% reference window
+  // strong : above ideal window end
+  if (tdsPercent < row.ey20) return 'weak';
+  if (tdsPercent > row.over22) return 'strong';
+  return 'ideal-zone';
+}
+
+export function classifyCombinedExtractionReport(
+  ratioText: string,
+  tdsPercent: number,
+  extractionTier: ExtractionTier,
+): CombinedExtractionReport {
+  const strengthZone = classifyTdsByRatioStrengthZone(ratioText, tdsPercent);
+
+  if (extractionTier === 'fail') {
+    return { strengthZone, extractionTier, label: 'Out of range' };
+  }
+
+  if (extractionTier === 'under') {
+    if (strengthZone === 'weak') return { strengthZone, extractionTier, label: 'Weak & Under' };
+    if (strengthZone === 'strong') return { strengthZone, extractionTier, label: 'Strong & Under' };
+    return { strengthZone, extractionTier, label: 'Under' };
+  }
+
+  if (extractionTier === 'over') {
+    if (strengthZone === 'weak') return { strengthZone, extractionTier, label: 'Weak & Over' };
+    if (strengthZone === 'strong') return { strengthZone, extractionTier, label: 'Strong & Over' };
+    return { strengthZone, extractionTier, label: 'Over' };
+  }
+
+  // ideal
+  if (strengthZone === 'weak') return { strengthZone, extractionTier, label: 'Weak' };
+  if (strengthZone === 'strong') return { strengthZone, extractionTier, label: 'Strong' };
+  return { strengthZone, extractionTier, label: 'SCA Ideal' };
 }
 
 export function getRatioReferenceIdealWindow(ratioText: string): { ratio: number; min: number; max: number } | null {
