@@ -7,9 +7,10 @@ import { CoffeeEntry, getScoreHex, SCORE_ATTRIBUTES, classifyTdsByStrengthZone }
 
 interface ShareCardProps {
   entry: CoffeeEntry;
+  tagDetailMode?: 'compact' | 'full';
 }
 
-export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry }, ref) => {
+export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry, tagDetailMode = 'compact' }, ref) => {
   const color = getScoreHex(entry.totalScore);
   const date = new Date(entry.createdAt).toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -30,7 +31,61 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry }, 
   const overallReaction = entry.sensoryReactions?.overall;
   const reactionEmoji = overallReaction === 'like' ? '👍' : overallReaction === 'soso' ? '😐' : overallReaction === 'dislike' ? '👎' : null;
 
-  const flavorTags = (entry.overallDescriptors ?? []).slice(0, 8);
+  const normalizeMouthfeel = (tag: string) => {
+    const normalized = tag.trim();
+    const canonical = normalized
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (
+      canonical === 'medium' ||
+      canonical === 'body weight medium' ||
+      canonical === 'body-weight-medium'
+    ) {
+      return 'Medium Body';
+    }
+
+    return normalized;
+  };
+
+  const normalizeAftertaste = (tag: string) => {
+    const normalized = tag.trim();
+    const canonical = normalized
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (canonical === 'med' || canonical === 'medium') return 'Medium Aftertaste';
+    if (canonical === 'quick') return 'Quick Aftertaste';
+
+    return normalized;
+  };
+
+  const selectedGroups: Array<{ label: string; tags: string[]; bg: string; fg: string }> = [
+    { label: '👃 Aroma Standard', tags: (entry.aromaDescriptors ?? []).map(t => t.trim()).filter(Boolean), bg: '#fae8ff', fg: '#7e22ce' },
+    { label: 'Acidity Types (Auto)', tags: (entry.acidityTypeDescriptors ?? []).map(t => t.trim()).filter(Boolean), bg: '#ecfeff', fg: '#155e75' },
+    { label: '🍯 Sweetness Details', tags: (entry.sweetnessDetailDescriptors ?? []).map(t => t.trim()).filter(Boolean), bg: '#fff7ed', fg: '#c2410c' },
+    { label: 'Mouthfeel Types', tags: (entry.mouthfeelDescriptors ?? []).map(normalizeMouthfeel).filter(Boolean), bg: '#e0f2fe', fg: '#0f766e' },
+    { label: 'Aftertaste', tags: (entry.aftertasteDescriptors ?? []).map(normalizeAftertaste).filter(Boolean), bg: '#dbeafe', fg: '#1e3a8a' },
+  ].filter(group => group.tags.length > 0);
+
+  const compactGroups = selectedGroups
+    .map(group => ({
+      label: group.label,
+      bg: group.bg,
+      fg: group.fg,
+      chips: group.tags.slice(0, 3),
+      more: Math.max(0, group.tags.length - 3),
+    }))
+    .filter(group => group.chips.length > 0);
+
+  const compactSubOnlyChips = Array.from(new Set(
+    selectedGroups.flatMap(group => group.tags)
+  ));
+
   const notes = (entry.notes ?? '').trim();
 
   return (
@@ -141,16 +196,51 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry }, 
         </div>
       )}
 
-      {/* Flavor tags */}
-      {flavorTags.length > 0 && (
+      {/* Sensory + descriptor tags */}
+      {tagDetailMode === 'full' && compactGroups.length > 0 && (
+        <div style={{ padding: '10px 20px 4px', background: '#fffdf9' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {compactGroups.map(group => (
+              <div key={`compact-${group.label}`} style={{ background: '#ffffff', border: '1px solid #ebe5da', borderRadius: 10, padding: '6px 7px' }}>
+                <div style={{ fontSize: 8, color: '#6b7280', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: 0.35 }}>
+                  {group.label}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
+                  {group.chips.map(tag => (
+                    <span key={`${group.label}-${tag}`} style={{ fontSize: 9, fontWeight: 600, background: group.bg, color: group.fg, padding: '2px 7px', borderRadius: 99 }}>
+                      {tag}
+                    </span>
+                  ))}
+                  {group.more > 0 && (
+                    <span style={{ fontSize: 9, fontWeight: 700, background: '#f3f4f6', color: '#4b5563', padding: '2px 7px', borderRadius: 99 }}>
+                      +{group.more}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tagDetailMode === 'compact' && compactSubOnlyChips.length > 0 && (
         <div style={{ padding: '10px 20px 4px', background: '#fffdf9' }}>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5 }}>
-            {flavorTags.map(tag => (
-              <span key={tag} style={{ fontSize: 10, fontWeight: 500, background: '#1e293b', color: '#fff', padding: '3px 9px', borderRadius: 99 }}>
+            {compactSubOnlyChips.map(tag => (
+              <span key={tag} style={{ fontSize: 10, fontWeight: 600, background: '#1f2937', color: '#fff', padding: '3px 9px', borderRadius: 99 }}>
                 {tag}
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Brewing strength note */}
+      {mode === 'brewing' && zoneLabel && (
+        <div style={{ padding: '0 20px 6px' }}>
+          <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>
+            Strength label is a style guide, not a quality judgment.
+          </p>
         </div>
       )}
 

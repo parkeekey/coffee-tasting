@@ -179,7 +179,7 @@ export type IntensityLevel = keyof typeof INTENSITY_DESCRIPTORS;
 // Mouthfeel Descriptors — optional tags for mouthfeel attribute
 export const MOUTHFEEL_DESCRIPTORS = {
   Body: {
-    Weight: ['💧 Light', '⚖️ Medium', '🪨 Heavy', '🧱 Full'],
+    Weight: ['💧Light Body', '⚖️Medium Body', '🪨Heavy Body', '🧱Full Body'],
     Viscosity: ['💦 Watery', '🎀 Thin', '🧃 Juicy', '🌊 Thick', '🧴 Sticky', '🛡️ Coating'],
   },
   Texture: {
@@ -195,8 +195,8 @@ export type MouthfeelSubtype<T extends MouthfeelPrimaryType = MouthfeelPrimaryTy
 // Aftertaste Descriptors — optional tags for aftertaste attribute
 export const AFTERTASTE_DESCRIPTORS = {
   Length: {
-    Short: ['⚡ Quick'],
-    Med: ['⚖️ Med'],
+    Short: ['Quick Aftertaste'],
+    Med: ['Medium Aftertaste'],
     Long: ['♾️ Persistent', '🌀 Lingering'],
   },
 } as const;
@@ -542,7 +542,26 @@ export function loadEntries(): CoffeeEntry[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Partial<CoffeeEntry>[];
-    return parsed.map((entry) => ({
+    return parsed.map((entry) => {
+      const normalizeMouthfeelDescriptor = (value: string): string => {
+        const v = value.trim().toLowerCase();
+        if (v === '💧 light' || v === 'light') return 'Light Body';
+        if (v === '⚖️ medium' || v === 'medium' || v === 'body-weight-medium' || v === 'body weight medium') {
+          return 'Medium Body';
+        }
+        if (v === '🪨 heavy' || v === 'heavy') return 'Heavy Body';
+        if (v === '🧱 full' || v === 'full') return 'Full Body';
+        return value;
+      };
+
+      const normalizeAftertasteDescriptor = (value: string): string => {
+        const v = value.trim().toLowerCase();
+        if (v === '⚖️ med' || v === 'med' || v === 'medium') return 'Medium Aftertaste';
+        if (v === '⚡ quick' || v === 'quick') return 'Quick Aftertaste';
+        return value;
+      };
+
+      return {
       ...entry,
       entryMode: entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting'),
       isBlindMode: entry.isBlindMode ?? (entry.notes ?? '').includes('[Blind Mode]'),
@@ -595,10 +614,11 @@ export function loadEntries(): CoffeeEntry[] {
       acidityDescriptors: entry.acidityDescriptors ?? [],
       acidityTypeDescriptors: entry.acidityTypeDescriptors ?? inferAcidityTypes(entry.acidityDescriptors ?? []),
       intensityDescriptors: entry.intensityDescriptors ?? [],
-      mouthfeelDescriptors: entry.mouthfeelDescriptors ?? [],
-      aftertasteDescriptors: entry.aftertasteDescriptors ?? [],
+      mouthfeelDescriptors: (entry.mouthfeelDescriptors ?? []).map(normalizeMouthfeelDescriptor),
+      aftertasteDescriptors: (entry.aftertasteDescriptors ?? []).map(normalizeAftertasteDescriptor),
       overallDescriptors: entry.overallDescriptors ?? [],
-    })) as CoffeeEntry[];
+    };
+    }) as CoffeeEntry[];
   } catch {
     return [];
   }

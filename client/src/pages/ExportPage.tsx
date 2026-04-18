@@ -72,6 +72,7 @@ function downloadFile(content: string, filename: string, mime: string) {
 export default function ExportPage() {
   const { entries } = useCoffee();
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv');
+  const [pngTagDetailMode, setPngTagDetailMode] = useState<'compact' | 'full'>('full');
   const [copied, setCopied] = useState(false);
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -243,7 +244,7 @@ export default function ExportPage() {
           </div>
           <div style={{ display: 'grid', gap: 10 }}>
             {selectedEntries.map(entry => (
-              <ShareCard key={entry.id} entry={entry} />
+              <ShareCard key={entry.id} entry={entry} tagDetailMode={pngTagDetailMode} />
             ))}
           </div>
         </div>
@@ -347,6 +348,34 @@ export default function ExportPage() {
             </button>
           ))}
         </div>
+
+        {selectedFormat === 'png' && (
+          <div className="mt-3 p-3 rounded-lg border border-border bg-muted/20">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              PNG Tag Detail
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={pngTagDetailMode === 'compact' ? 'default' : 'outline'}
+                onClick={() => setPngTagDetailMode('compact')}
+                className="h-8 text-xs"
+              >
+                Chips only (sub-tags)
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={pngTagDetailMode === 'full' ? 'default' : 'outline'}
+                onClick={() => setPngTagDetailMode('full')}
+                className="h-8 text-xs"
+              >
+                Context columns (default)
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Log selection */}
@@ -401,7 +430,7 @@ export default function ExportPage() {
                 <p className="text-xs text-muted-foreground">Select at least one log to preview export content.</p>
               ) : selectedFormat === 'png' ? (
                 <p className="text-xs text-muted-foreground">
-                  PNG exports a visual snapshot of selected log cards.
+                  PNG exports a visual snapshot of selected log cards ({pngTagDetailMode === 'compact' ? 'compact chips' : 'full tag detail'}).
                 </p>
               ) : (
                 <pre className="text-[10px] text-muted-foreground font-mono-custom whitespace-pre leading-relaxed">
