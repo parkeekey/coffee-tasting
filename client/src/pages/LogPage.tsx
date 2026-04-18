@@ -300,6 +300,21 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
               {entry.brewRecipeNotes && (
                 <p className="text-xs text-emerald-900 mt-1.5 italic">"{entry.brewRecipeNotes}"</p>
               )}
+              {(entry.brewAdjRatio || entry.brewAdjGrindsize || entry.brewAdjTemp || entry.brewAdjTurbulance) && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-xs text-blue-900 font-medium mb-1">⚗️ After-Brewing Adjustments</p>
+                  <div className="space-y-0.5 text-xs text-blue-800">
+                    {entry.brewAdjRatio && <p>Ratio: 1:{entry.brewRatio} → <span className="font-medium">1:{entry.brewAdjRatio}</span></p>}
+                    {entry.brewAdjGrindsize && (
+                      <p>
+                        Grind Clicks: {entry.brewGrindClicks} → <span className="font-medium">{entry.brewAdjGrindsize}</span> {entry.brewGrinder && `(${entry.brewGrinder})`} {entry.brewGrindMicrons && `${entry.brewGrindMicrons}µm`}
+                      </p>
+                    )}
+                    {entry.brewAdjTemp && <p>Temp: {entry.brewTemp}°C → <span className="font-medium">{entry.brewAdjTemp}°C</span></p>}
+                    {entry.brewAdjTurbulance && <p>Turbulance: <span className="font-medium">{entry.brewAdjTurbulance}</span></p>}
+                  </div>
+                </div>
+              )}
               {entry.brewTDS && (() => {
                 const tds = parseFloat(entry.brewTDS);
                 const dose = parseFloat(entry.brewDose ?? '');

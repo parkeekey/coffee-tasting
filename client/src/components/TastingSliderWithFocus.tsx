@@ -201,9 +201,9 @@ export function TastingSliderWithFocus({
         <div className="mt-2 px-1">
           <div className="flex items-center gap-1">
             {[
-              { key: 'like' as const, text: 'Like', base: 'text-emerald-700 border-emerald-300 bg-emerald-50' },
-              { key: 'soso' as const, text: 'So-so', base: 'text-amber-700 border-amber-300 bg-amber-50' },
-              { key: 'dislike' as const, text: 'Dislike', base: 'text-rose-700 border-rose-300 bg-rose-50' },
+              { key: 'like' as const, emoji: '👍', text: 'Like', base: 'text-emerald-700 border-emerald-300 bg-emerald-50' },
+              { key: 'soso' as const, emoji: '😐', text: 'So-so', base: 'text-amber-700 border-amber-300 bg-amber-50' },
+              { key: 'dislike' as const, emoji: '👎', text: 'Dislike', base: 'text-rose-700 border-rose-300 bg-rose-50' },
             ].map((option) => {
               const selected = reaction === option.key;
               return (
@@ -212,13 +212,14 @@ export function TastingSliderWithFocus({
                   type="button"
                   onClick={() => onReactionChange(selected ? '' : option.key)}
                   className={cn(
-                    'h-7 px-2 rounded-md border text-[11px] font-semibold transition-colors',
+                    'h-5 px-1.5 rounded border text-[9px] font-semibold inline-flex items-center gap-1 whitespace-nowrap transition-colors',
                     selected
                       ? option.base
                       : 'text-muted-foreground border-border bg-white hover:bg-muted/60'
                   )}
                 >
-                  {option.text}
+                  <span>{option.emoji}</span>
+                  <span>{option.text}</span>
                 </button>
               );
             })}

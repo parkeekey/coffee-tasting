@@ -70,6 +70,11 @@ export interface CoffeeEntry {
   brewGrindSize: string;     // additional grind note
   brewPours: BrewPour[];     // pour planner rows
   brewRecipeNotes: string;
+  // After-brewing adjustments
+  brewAdjRatio: string;      // e.g. "14.2" — adjusted ratio after brewing (number)
+  brewAdjGrindsize: string;  // e.g. "420" — adjusted grind size in µm (number only)
+  brewAdjTemp: string;       // e.g. "94" — adjusted temperature in °C (number only)
+  brewAdjTurbulance: string; // e.g. "Gentle" — adjusted turbulance level (text)
   // Tasting mode EY inputs
   tastingLiquidMl: string;   // brewed coffee volume (ml) for EY calc in tasting mode
   tastingDose: string;       // dose (g) for EY calc in tasting mode
@@ -558,6 +563,10 @@ export function loadEntries(): CoffeeEntry[] {
       brewGrindSize: entry.brewGrindSize ?? '',
       brewPours: entry.brewPours ?? [],
       brewRecipeNotes: entry.brewRecipeNotes ?? '',
+      brewAdjRatio: entry.brewAdjRatio ?? '',
+      brewAdjGrindsize: entry.brewAdjGrindsize ?? '',
+      brewAdjTemp: entry.brewAdjTemp ?? '',
+      brewAdjTurbulance: entry.brewAdjTurbulance ?? '',
       tastingLiquidMl: entry.tastingLiquidMl ?? '',
       tastingDose: entry.tastingDose ?? '',
       sensoryNotes: {
@@ -652,6 +661,10 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
     brewGrindSize: '',
     brewPours: [],
     brewRecipeNotes: '',
+    brewAdjRatio: '',
+    brewAdjGrindsize: '',
+    brewAdjTemp: '',
+    brewAdjTurbulance: '',
     tastingLiquidMl: '',
     tastingDose: '',
     notes: '',

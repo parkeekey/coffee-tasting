@@ -65,6 +65,7 @@ export function BrewingRecipeSection({
     (draft.brewPours ?? []).forEach(p => { if (p.action) s.add(p.id); });
     return s;
   });
+  const [showAdjustments, setShowAdjustments] = useState(false);
   const toggleNoteRow = (id: number) =>
     setOpenNoteRows(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
@@ -393,16 +394,129 @@ export function BrewingRecipeSection({
         </p>
       </div>
 
-      {/* ── Section 6: Recipe Notes ── */}
-      <div>
-        <Label className="text-xs text-muted-foreground mb-1 block">Recipe Notes</Label>
-        <Textarea
-          value={f('brewRecipeNotes')}
-          onChange={e => onFieldChange('brewRecipeNotes', e.target.value)}
-          placeholder="e.g. 45s bloom at 50g, gentle swirl after 2nd pour…"
-          className="text-sm resize-none"
-          rows={2}
-        />
+      {/* ── Section 6: Water Recipe ── */}
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Water Recipe" value={f('brewWater')} onChange={ch('brewWater')} placeholder="e.g. TWW 150ppm" />
+        <Field label="Recipe Notes" value={f('brewRecipeNotes')} onChange={ch('brewRecipeNotes')} placeholder="e.g. gentle swirl" />
+      </div>
+
+      {/* ── Section 8: After-Brewing Adjustment (Toggle) ── */}
+      <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+        <button
+          type="button"
+          onClick={() => setShowAdjustments(v => !v)}
+          className="w-full flex items-center justify-between mb-2"
+        >
+          <span className="text-xs font-semibold text-blue-900">⚗️ After-Brewing Adjustment</span>
+          <span className="text-blue-700 text-sm">{showAdjustments ? '▼' : '▶'}</span>
+        </button>
+        
+        {showAdjustments && (
+          <div className="space-y-2 pt-2 border-t border-blue-200">
+            {/* Ratio Adjustment */}
+            <div>
+              <div className="flex items-center gap-1 mb-0.5">
+                <Label className="text-xs text-blue-900 flex-1">Ratio (1:x)</Label>
+                {draft.brewRatio && <span className="text-xs text-blue-600">Current: 1:{draft.brewRatio}</span>}
+              </div>
+              <Input
+                value={f('brewAdjRatio')}
+                onChange={e => onFieldChange('brewAdjRatio', e.target.value)}
+                placeholder={draft.brewRatio ? `${draft.brewRatio}` : "adjust here"}
+                className="h-7 text-xs flex-1"
+              />
+            </div>
+
+            {/* Grind Size Adjustment (clicks with +/- buttons) */}
+            <div>
+              <div className="flex items-center gap-1 mb-0.5">
+                <Label className="text-xs text-blue-900 flex-1">Grind Size (clicks)</Label>
+                {(draft.brewGrinder || draft.brewGrindClicks || draft.brewGrindMicrons) && (
+                  <span className="text-xs text-blue-600">
+                    {[draft.brewGrinder, draft.brewGrindClicks && `${draft.brewGrindClicks}c`, draft.brewGrindMicrons && `${draft.brewGrindMicrons}µm`].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = parseFloat(f('brewAdjGrindsize')) || 0;
+                    onFieldChange('brewAdjGrindsize', Math.max(0, current - 1).toFixed(0));
+                  }}
+                  className="w-6 h-6 rounded border border-blue-300 flex items-center justify-center text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+                >
+                  −
+                </button>
+                <Input
+                  type="number"
+                  value={f('brewAdjGrindsize')}
+                  onChange={e => onFieldChange('brewAdjGrindsize', e.target.value)}
+                  placeholder={draft.brewGrindClicks ? `${draft.brewGrindClicks}` : "adjust"}
+                  className="h-7 text-xs flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = parseFloat(f('brewAdjGrindsize')) || 0;
+                    onFieldChange('brewAdjGrindsize', (current + 1).toFixed(0));
+                  }}
+                  className="w-6 h-6 rounded border border-blue-300 flex items-center justify-center text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Temperature Adjustment (with +/- buttons) */}
+            <div>
+              <div className="flex items-center gap-1 mb-0.5">
+                <Label className="text-xs text-blue-900 flex-1">Temperature (°C)</Label>
+                {draft.brewTemp && <span className="text-xs text-blue-600">Current: {draft.brewTemp}°C</span>}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = parseFloat(f('brewAdjTemp')) || 0;
+                    onFieldChange('brewAdjTemp', Math.max(0, current - 1).toFixed(0));
+                  }}
+                  className="w-6 h-6 rounded border border-blue-300 flex items-center justify-center text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+                >
+                  −
+                </button>
+                <Input
+                  type="number"
+                  value={f('brewAdjTemp')}
+                  onChange={e => onFieldChange('brewAdjTemp', e.target.value)}
+                  placeholder={draft.brewTemp ? `${draft.brewTemp}` : "adjust"}
+                  className="h-7 text-xs flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = parseFloat(f('brewAdjTemp')) || 0;
+                    onFieldChange('brewAdjTemp', (current + 1).toFixed(0));
+                  }}
+                  className="w-6 h-6 rounded border border-blue-300 flex items-center justify-center text-blue-700 hover:bg-blue-100 transition-colors text-xs font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Turbulance Adjustment */}
+            <div>
+              <Label className="text-xs text-blue-900 mb-0.5 block">Turbulance</Label>
+              <Input
+                value={f('brewAdjTurbulance')}
+                onChange={e => onFieldChange('brewAdjTurbulance', e.target.value)}
+                placeholder="e.g. Gentle, Medium, Vigorous"
+                className="h-7 text-xs"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
