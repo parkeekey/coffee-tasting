@@ -11,6 +11,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { ScoreArc } from '@/components/ScoreArc';
 import { TastingSliderWithFocus } from '@/components/TastingSliderWithFocus';
@@ -26,6 +36,8 @@ export default function TastePage() {
   const [guideEyMax, setGuideEyMax] = useState('22');
   const [tdsConfirmed, setTdsConfirmed] = useState(false);
   const [showQuickHelper, setShowQuickHelper] = useState(false);
+  const [showTdsEy, setShowTdsEy] = useState(true);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   useEffect(() => {
     setTdsConfirmed(false);
@@ -47,7 +59,12 @@ export default function TastePage() {
   };
 
   const handleReset = () => {
+    setClearConfirmOpen(true);
+  };
+
+  const confirmReset = () => {
     resetDraft();
+    setClearConfirmOpen(false);
     toast.info('Form cleared. Ready for next sample.');
   };
 
@@ -301,261 +318,273 @@ export default function TastePage() {
       </div>
 
       {/* TDS & Extraction Yield — shown for tasting and brewing modes */}
-      {draft.entryMode !== 'pad' && (() => {
-        const tds = parseFloat(draft.brewTDS);
-        const doseNum = parseFloat(draft.entryMode === 'brewing' ? draft.brewDose : draft.tastingDose);
-        const estWaterOut = draft.entryMode === 'brewing' ? estimateWaterOut(doseNum, draft.brewRatio) : null;
-        const liquid = parseFloat(
-          draft.entryMode === 'brewing'
-            ? (draft.brewYield || (estWaterOut !== null ? estWaterOut.toFixed(1) : ''))
-            : draft.tastingLiquidMl
-        );
-        const dose = parseFloat(draft.entryMode === 'brewing' ? draft.brewDose : draft.tastingDose);
-        const ratioEy = Number.isFinite(tds) ? estimateExtractionYieldFromRatioReference(draft.brewRatio, tds) : null;
-        const quickEy = Number.isFinite(tds) ? estimateExtractionYieldFromQuickGuide(draft.brewRatio, tds) : null;
-        const formulaEy = calculateExtractionYieldPercent(tds, liquid, dose);
-        const ey = ratioEy ?? quickEy ?? formulaEy;
-        const eySource = ratioEy !== null ? 'sheet' : quickEy !== null ? 'quick' : 'calc';
-        const ratioReference = Number.isFinite(tds) ? classifyTdsByRatioReference(draft.brewRatio, tds) : null;
-        const extractionState = ratioReference ?? (ey !== null ? classifyExtractionYield(ey) : null);
-        const strengthZone = Number.isFinite(tds)
-          ? (draft.entryMode === 'brewing'
-            ? classifyTdsByRatioStrengthZone(draft.brewRatio, tds)
-            : classifyTdsByStrengthZone(tds))
-          : null;
-        const combinedReport = (Number.isFinite(tds) && extractionState)
-          ? classifyCombinedExtractionReport(draft.brewRatio, tds, extractionState.tier)
-          : null;
-        const idealWindow = getRatioReferenceIdealWindow(draft.brewRatio);
-        const ratioText = (draft.brewRatio ?? '').trim();
-        const activeGuideRatio = (guideRatioInput.trim() || draft.brewRatio || '13').trim();
-        const minEy = Math.min(30, Math.max(10, parseInt(guideEyMin || '18', 10) || 18));
-        const maxEy = Math.min(30, Math.max(minEy, parseInt(guideEyMax || '22', 10) || 22));
-        const quickRows = Array.from({ length: (maxEy - minEy) + 1 }, (_, idx) => {
-          const eyTarget = minEy + idx;
-          const tdsTarget = getQuickGuideTdsTarget(activeGuideRatio, eyTarget);
-          return { eyTarget, tdsTarget };
-        });
-        const tone = extractionState?.tier === 'ideal'
-          ? { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-300' }
-          : extractionState?.tier === 'under'
-            ? { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-300' }
-            : extractionState?.tier === 'fail'
-              ? { color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-300' }
-              : { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300' };
-        return (
-          <div className="bg-white border-b border-border px-4 py-3">
-            <div className="p-3 rounded-xl border-2 border-cyan-300 bg-cyan-50 space-y-3">
-              {/* Header */}
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-cyan-500 flex items-center justify-center flex-none">
-                  <span className="text-white text-sm leading-none">🔬</span>
-                </div>
-                <p className="text-xs font-semibold text-cyan-900">TDS &amp; Extraction Yield</p>
-                {draft.entryMode === 'brewing' && ratioText && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-cyan-300 bg-white text-cyan-800 whitespace-nowrap">
-                    Ratio 1:{ratioText}
-                  </span>
-                )}
-                {strengthZone && (
-                  <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                    (strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
-                    : strengthZone === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
-                    : strengthZone === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
-                    : 'text-muted-foreground bg-muted border-border'
-                  }`}>
-                    {(strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? '✓ Ideal Zone' : strengthZone === 'weak' ? '💧 Weak' : strengthZone === 'strong' ? '🔥 Strong' : '— Out of range'}
-                  </span>
-                )}
+      {draft.entryMode !== 'pad' && (
+        <div className="bg-white border-b border-border px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setShowTdsEy(v => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-cyan-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500 flex items-center justify-center flex-none">
+                <span className="text-white text-sm leading-none">🔬</span>
               </div>
-              {/* Inputs */}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-[11px] text-cyan-800 mb-1 block">TDS (%)</Label>
-                  <Input
-                    value={draft.brewTDS}
-                    onChange={e => {
-                      setTdsConfirmed(false);
-                      updateDraftField('brewTDS', e.target.value);
-                    }}
-                    placeholder="1.35"
-                    className="h-8 text-sm font-mono-custom"
-                  />
-                </div>
-                {draft.entryMode === 'tasting' ? (
-                  <>
-                    <div>
-                      <Label className="text-[11px] text-cyan-800 mb-1 block">Liquid (ml)</Label>
-                      <Input
-                        value={draft.tastingLiquidMl}
-                        onChange={e => updateDraftField('tastingLiquidMl', e.target.value)}
-                        placeholder="e.g. 250"
-                        className="h-8 text-sm font-mono-custom"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-cyan-800 mb-1 block">Dose (g)</Label>
-                      <Input
-                        value={draft.tastingDose}
-                        onChange={e => updateDraftField('tastingDose', e.target.value)}
-                        placeholder="e.g. 15"
-                        className="h-8 text-sm font-mono-custom"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-2 grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[11px] text-cyan-800 mb-1 block">Water Out (g)</Label>
-                      <Input
-                        value={draft.brewYield}
-                        onChange={e => updateDraftField('brewYield', e.target.value)}
-                        placeholder={estWaterOut !== null ? `${estWaterOut.toFixed(1)} (auto est)` : 'e.g. 230'}
-                        className="h-8 text-sm font-mono-custom"
-                      />
-                    </div>
-                    <div className="flex items-end pb-1">
-                      <p className="text-[11px] text-cyan-600">
-                        {estWaterOut !== null
-                          ? `Auto est: ${estWaterOut.toFixed(1)}g from (Dose×Ratio)−(Dose×2)`
-                          : 'Add dose + ratio to auto-estimate Water Out'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {/* EY result */}
-              {ey !== null && extractionState ? (
-                <div className="space-y-2">
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${tone.bg} ${tone.border}`}>
-                    <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">Extraction Yield ({eySource})</span>
-                    <span className={`text-lg font-bold font-mono-custom ${tone.color}`}>{ey.toFixed(1)}%</span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>
-                      {combinedReport?.label ?? (extractionState.tier === 'under' ? 'Under' : extractionState.tier === 'ideal' ? 'Ideal' : extractionState.tier === 'fail' ? 'Fail' : 'Over')}
+              <p className="text-xs font-semibold text-cyan-900">TDS &amp; Extraction Yield</p>
+            </div>
+            {showTdsEy ? <ChevronUp size={16} className="text-cyan-700" /> : <ChevronDown size={16} className="text-cyan-700" />}
+          </button>
+
+          {showTdsEy && (() => {
+            const tds = parseFloat(draft.brewTDS);
+            const doseNum = parseFloat(draft.entryMode === 'brewing' ? draft.brewDose : draft.tastingDose);
+            const estWaterOut = draft.entryMode === 'brewing' ? estimateWaterOut(doseNum, draft.brewRatio) : null;
+            const liquid = parseFloat(
+              draft.entryMode === 'brewing'
+                ? (draft.brewYield || (estWaterOut !== null ? estWaterOut.toFixed(1) : ''))
+                : draft.tastingLiquidMl
+            );
+            const dose = parseFloat(draft.entryMode === 'brewing' ? draft.brewDose : draft.tastingDose);
+            const ratioEy = Number.isFinite(tds) ? estimateExtractionYieldFromRatioReference(draft.brewRatio, tds) : null;
+            const quickEy = Number.isFinite(tds) ? estimateExtractionYieldFromQuickGuide(draft.brewRatio, tds) : null;
+            const formulaEy = calculateExtractionYieldPercent(tds, liquid, dose);
+            const ey = ratioEy ?? quickEy ?? formulaEy;
+            const eySource = ratioEy !== null ? 'sheet' : quickEy !== null ? 'quick' : 'calc';
+            const ratioReference = Number.isFinite(tds) ? classifyTdsByRatioReference(draft.brewRatio, tds) : null;
+            const extractionState = ratioReference ?? (ey !== null ? classifyExtractionYield(ey) : null);
+            const strengthZone = Number.isFinite(tds)
+              ? (draft.entryMode === 'brewing'
+                ? classifyTdsByRatioStrengthZone(draft.brewRatio, tds)
+                : classifyTdsByStrengthZone(tds))
+              : null;
+            const combinedReport = (Number.isFinite(tds) && extractionState)
+              ? classifyCombinedExtractionReport(draft.brewRatio, tds, extractionState.tier)
+              : null;
+            const idealWindow = getRatioReferenceIdealWindow(draft.brewRatio);
+            const ratioText = (draft.brewRatio ?? '').trim();
+            const activeGuideRatio = (guideRatioInput.trim() || draft.brewRatio || '13').trim();
+            const minEy = Math.min(30, Math.max(10, parseInt(guideEyMin || '18', 10) || 18));
+            const maxEy = Math.min(30, Math.max(minEy, parseInt(guideEyMax || '22', 10) || 22));
+            const quickRows = Array.from({ length: (maxEy - minEy) + 1 }, (_, idx) => {
+              const eyTarget = minEy + idx;
+              const tdsTarget = getQuickGuideTdsTarget(activeGuideRatio, eyTarget);
+              return { eyTarget, tdsTarget };
+            });
+            const tone = extractionState?.tier === 'ideal'
+              ? { color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-300' }
+              : extractionState?.tier === 'under'
+                ? { color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-300' }
+                : extractionState?.tier === 'fail'
+                  ? { color: 'text-violet-700', bg: 'bg-violet-50', border: 'border-violet-300' }
+                  : { color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-300' };
+
+            return (
+              <div className="p-3 rounded-xl border-2 border-cyan-300 bg-cyan-50 space-y-3">
+                <div className="flex items-center gap-2">
+                  {draft.entryMode === 'brewing' && ratioText && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-cyan-300 bg-white text-cyan-800 whitespace-nowrap">
+                      Ratio 1:{ratioText}
                     </span>
-                    <span className={`ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>{extractionState.label}</span>
-                  </div>
-
-                  <div className="px-3 py-2 rounded-lg border border-cyan-200 bg-cyan-50/70">
-                    <p className="text-[11px] font-semibold text-cyan-900">Suggestion only</p>
-                    <p className="text-[11px] text-cyan-800">
-                      {extractionState.tier === 'under' && 'Try finer grind, longer contact time, or slightly higher target EY. If the cup tastes great, keep it.'}
-                      {extractionState.tier === 'ideal' && 'In a good window. Keep this as baseline, then adjust by taste preference.'}
-                      {extractionState.tier === 'over' && 'Try coarser grind, shorter contact time, or lower target EY. If flavor is excellent, trust your cup.'}
-                      {extractionState.tier === 'fail' && 'Reading exceeds reference range. Re-check TDS reading and brew inputs, then judge by cup quality.'}
-                    </p>
-                    {draft.entryMode === 'brewing' && idealWindow && Number.isFinite(tds) && (
-                      <p className="text-[11px] text-cyan-900 mt-1">
-                        Status: <span className="font-semibold">{combinedReport?.label ?? '—'}</span> ·
-                        For 1:{idealWindow.ratio}, target TDS for SCA ideal is <span className="font-semibold">{idealWindow.min.toFixed(2)}–{idealWindow.max.toFixed(2)}%</span>
-                        {tds < idealWindow.min ? ' (raise TDS)' : tds > idealWindow.max ? ' (lower TDS)' : ' (inside ideal window)'}.
-                      </p>
-                    )}
-                  </div>
+                  )}
+                  {strengthZone && (
+                    <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                      (strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                      : strengthZone === 'weak' ? 'text-sky-700 bg-sky-50 border-sky-300'
+                      : strengthZone === 'strong' ? 'text-orange-700 bg-orange-50 border-orange-300'
+                      : 'text-muted-foreground bg-muted border-border'
+                    }`}>
+                      {(strengthZone === 'ideal' || strengthZone === 'ideal-zone') ? '✓ Ideal Zone' : strengthZone === 'weak' ? '💧 Weak' : strengthZone === 'strong' ? '🔥 Strong' : '— Out of range'}
+                    </span>
+                  )}
                 </div>
-              ) : (
-                <p className="text-[11px] text-cyan-600">
-                  {draft.entryMode === 'brewing'
-                    ? 'Fill in TDS + Ratio to estimate EY (sheet first, then Quick EXT fallback)'
-                    : 'Fill in TDS, Liquid volume and Dose to calculate Extraction Yield'}
-                </p>
-              )}
-              {ratioReference && idealWindow && (
-                <p className="text-[11px] text-cyan-700">
-                  Ratio reference active for 1:{idealWindow.ratio} → 20–22% zone is TDS {idealWindow.min.toFixed(2)} to {idealWindow.max.toFixed(2)}
-                </p>
-              )}
 
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTdsConfirmed(v => !v)}
-                  className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${tdsConfirmed ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-100'}`}
-                >
-                  {tdsConfirmed ? '✓ TDS Confirmed for Save' : 'Confirm TDS for Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowQuickHelper(v => !v)}
-                  className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${showQuickHelper ? 'bg-cyan-600 border-cyan-700 text-white' : 'bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-100'}`}
-                >
-                  {showQuickHelper ? 'Hide Quick EXT Helper' : 'Show Quick EXT Helper'}
-                </button>
-              </div>
-
-              {/* Quick Helper (not saved to log) */}
-              {showQuickHelper && (
-              <div className="border border-cyan-200 rounded-lg p-2 bg-white/70 space-y-2">
-                <p className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">Quick Ext / TDS Table (helper only)</p>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <Label className="text-[11px] text-cyan-800 mb-1 block">Search Ratio</Label>
+                    <Label className="text-[11px] text-cyan-800 mb-1 block">TDS (%)</Label>
                     <Input
-                      value={guideRatioInput}
-                      onChange={e => setGuideRatioInput(e.target.value)}
-                      placeholder={draft.brewRatio || '13'}
+                      value={draft.brewTDS}
+                      onChange={e => {
+                        setTdsConfirmed(false);
+                        updateDraftField('brewTDS', e.target.value);
+                      }}
+                      placeholder="1.35"
                       className="h-8 text-sm font-mono-custom"
                     />
                   </div>
-                  <div>
-                    <Label className="text-[11px] text-cyan-800 mb-1 block">EY Min %</Label>
-                    <Input
-                      value={guideEyMin}
-                      onChange={e => setGuideEyMin(e.target.value)}
-                      placeholder="18"
-                      className="h-8 text-sm font-mono-custom"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-cyan-800 mb-1 block">EY Max %</Label>
-                    <Input
-                      value={guideEyMax}
-                      onChange={e => setGuideEyMax(e.target.value)}
-                      placeholder="22"
-                      className="h-8 text-sm font-mono-custom"
-                    />
-                  </div>
+                  {draft.entryMode === 'tasting' ? (
+                    <>
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">Liquid (ml)</Label>
+                        <Input
+                          value={draft.tastingLiquidMl}
+                          onChange={e => updateDraftField('tastingLiquidMl', e.target.value)}
+                          placeholder="e.g. 250"
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">Dose (g)</Label>
+                        <Input
+                          value={draft.tastingDose}
+                          onChange={e => updateDraftField('tastingDose', e.target.value)}
+                          placeholder="e.g. 15"
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="col-span-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">Water Out (g)</Label>
+                        <Input
+                          value={draft.brewYield}
+                          onChange={e => updateDraftField('brewYield', e.target.value)}
+                          placeholder={estWaterOut !== null ? `${estWaterOut.toFixed(1)} (auto est)` : 'e.g. 230'}
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <p className="text-[11px] text-cyan-600">
+                          {estWaterOut !== null
+                            ? `Auto est: ${estWaterOut.toFixed(1)}g from (Dose×Ratio)−(Dose×2)`
+                            : 'Add dose + ratio to auto-estimate Water Out'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="rounded-md border border-cyan-200 overflow-hidden">
-                  <table className="w-full text-[11px]">
-                    <thead>
-                      <tr className="bg-cyan-100 text-cyan-900">
-                        <th className="px-2 py-1.5 text-left font-semibold">EY Goal</th>
-                        <th className="px-2 py-1.5 text-left font-semibold">TDS Target</th>
-                        <th className="px-2 py-1.5 text-left font-semibold">Strength Guide</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {quickRows.map((row, idx) => {
-                        const target = row.tdsTarget;
-                        const strength = target === null
-                          ? '—'
-                          : target < 1.1
-                            ? 'Below 1.10'
-                            : target > 1.45
-                              ? 'Above 1.45'
-                              : '1.10–1.45';
-                        return (
-                          <tr key={`${row.eyTarget}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-cyan-50/40'}>
-                            <td className="px-2 py-1.5">{row.eyTarget}%</td>
-                            <td className="px-2 py-1.5 font-mono-custom font-semibold">{target === null ? '—' : target.toFixed(2)}</td>
-                            <td className="px-2 py-1.5 text-cyan-800">{strength}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                {ey !== null && extractionState ? (
+                  <div className="space-y-2">
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${tone.bg} ${tone.border}`}>
+                      <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">Extraction Yield ({eySource})</span>
+                      <span className={`text-lg font-bold font-mono-custom ${tone.color}`}>{ey.toFixed(1)}%</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>
+                        {combinedReport?.label ?? (extractionState.tier === 'under' ? 'Under' : extractionState.tier === 'ideal' ? 'Ideal' : extractionState.tier === 'fail' ? 'Fail' : 'Over')}
+                      </span>
+                      <span className={`ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full border ${tone.bg} ${tone.color} ${tone.border}`}>{extractionState.label}</span>
+                    </div>
+
+                    <div className="px-3 py-2 rounded-lg border border-cyan-200 bg-cyan-50/70">
+                      <p className="text-[11px] font-semibold text-cyan-900">Suggestion only</p>
+                      <p className="text-[11px] text-cyan-800">
+                        {extractionState.tier === 'under' && 'Try finer grind, longer contact time, or slightly higher target EY. If the cup tastes great, keep it.'}
+                        {extractionState.tier === 'ideal' && 'In a good window. Keep this as baseline, then adjust by taste preference.'}
+                        {extractionState.tier === 'over' && 'Try coarser grind, shorter contact time, or lower target EY. If flavor is excellent, trust your cup.'}
+                        {extractionState.tier === 'fail' && 'Reading exceeds reference range. Re-check TDS reading and brew inputs, then judge by cup quality.'}
+                      </p>
+                      {draft.entryMode === 'brewing' && idealWindow && Number.isFinite(tds) && (
+                        <p className="text-[11px] text-cyan-900 mt-1">
+                          Status: <span className="font-semibold">{combinedReport?.label ?? '—'}</span> ·
+                          For 1:{idealWindow.ratio}, target TDS for SCA ideal is <span className="font-semibold">{idealWindow.min.toFixed(2)}–{idealWindow.max.toFixed(2)}%</span>
+                          {tds < idealWindow.min ? ' (raise TDS)' : tds > idealWindow.max ? ' (lower TDS)' : ' (inside ideal window)'}.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-cyan-600">
+                    {draft.entryMode === 'brewing'
+                      ? 'Fill in TDS + Ratio to estimate EY (sheet first, then Quick EXT fallback)'
+                      : 'Fill in TDS, Liquid volume and Dose to calculate Extraction Yield'}
+                  </p>
+                )}
+
+                {ratioReference && idealWindow && (
+                  <p className="text-[11px] text-cyan-700">
+                    Ratio reference active for 1:{idealWindow.ratio} → 20–22% zone is TDS {idealWindow.min.toFixed(2)} to {idealWindow.max.toFixed(2)}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTdsConfirmed(v => !v)}
+                    className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${tdsConfirmed ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-100'}`}
+                  >
+                    {tdsConfirmed ? '✓ TDS Confirmed for Save' : 'Confirm TDS for Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickHelper(v => !v)}
+                    className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${showQuickHelper ? 'bg-cyan-600 border-cyan-700 text-white' : 'bg-white border-cyan-300 text-cyan-800 hover:bg-cyan-100'}`}
+                  >
+                    {showQuickHelper ? 'Hide Quick EXT Helper' : 'Show Quick EXT Helper'}
+                  </button>
                 </div>
-                <p className="text-[10px] text-cyan-700">
-                  Helper only (not logged). For 1:13–1:24 and EY 18–22, values follow your static table; outside that window the app estimates from EY math with Water Out ≈ Dose×(Ratio−2).
-                </p>
+
+                {showQuickHelper && (
+                  <div className="border border-cyan-200 rounded-lg p-2 bg-white/70 space-y-2">
+                    <p className="text-[11px] font-semibold text-cyan-900 uppercase tracking-wide">Quick Ext / TDS Table (helper only)</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">Search Ratio</Label>
+                        <Input
+                          value={guideRatioInput}
+                          onChange={e => setGuideRatioInput(e.target.value)}
+                          placeholder={draft.brewRatio || '13'}
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">EY Min %</Label>
+                        <Input
+                          value={guideEyMin}
+                          onChange={e => setGuideEyMin(e.target.value)}
+                          placeholder="18"
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-cyan-800 mb-1 block">EY Max %</Label>
+                        <Input
+                          value={guideEyMax}
+                          onChange={e => setGuideEyMax(e.target.value)}
+                          placeholder="22"
+                          className="h-8 text-sm font-mono-custom"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-cyan-200 overflow-hidden">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="bg-cyan-100 text-cyan-900">
+                            <th className="px-2 py-1.5 text-left font-semibold">EY Goal</th>
+                            <th className="px-2 py-1.5 text-left font-semibold">TDS Target</th>
+                            <th className="px-2 py-1.5 text-left font-semibold">Strength Guide</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {quickRows.map((row, idx) => {
+                            const target = row.tdsTarget;
+                            const strength = target === null
+                              ? '—'
+                              : target < 1.1
+                                ? 'Below 1.10'
+                                : target > 1.45
+                                  ? 'Above 1.45'
+                                  : '1.10–1.45';
+                            return (
+                              <tr key={`${row.eyTarget}-${idx}`} className={idx % 2 === 0 ? 'bg-white' : 'bg-cyan-50/40'}>
+                                <td className="px-2 py-1.5">{row.eyTarget}%</td>
+                                <td className="px-2 py-1.5 font-mono-custom font-semibold">{target === null ? '—' : target.toFixed(2)}</td>
+                                <td className="px-2 py-1.5 text-cyan-800">{strength}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-cyan-700">
+                      Helper only (not logged). For 1:13–1:24 and EY 18–22, values follow your static table; outside that window the app estimates from EY math with Water Out ≈ Dose×(Ratio−2).
+                    </p>
+                  </div>
+                )}
               </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+            );
+          })()}
+        </div>
+      )}
       <div className="bg-white flex-1">
         <div className="px-4 pt-3 pb-1 flex items-center justify-between">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
@@ -623,6 +652,7 @@ export default function TastePage() {
       <div className="fixed bottom-16 left-0 right-0 z-40" style={{ maxWidth: '480px', margin: '0 auto' }}>
       <div className="bg-white/95 backdrop-blur-sm border-t border-border px-4 py-3 flex gap-3">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={handleReset}
@@ -632,6 +662,7 @@ export default function TastePage() {
           Clear
         </Button>
         <Button
+          type="button"
           size="sm"
           onClick={handleSave}
           className="flex-1 gap-1.5 font-semibold"
@@ -642,6 +673,21 @@ export default function TastePage() {
         </Button>
       </div>
       </div>
+
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear current entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all unsaved inputs for this form.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmReset}>Clear Entry</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
