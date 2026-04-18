@@ -625,23 +625,23 @@ export default function LogPage() {
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showPreferenceInsights, setShowPreferenceInsights] = useState(false);
+  const [showImportTools, setShowImportTools] = useState(false);
   const [modeView, setModeView] = useState<'all' | 'tasting' | 'brewing' | 'pad'>('all');
+  const [pastedJson, setPastedJson] = useState('');
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const openImportPicker = () => {
     importInputRef.current?.click();
   };
 
-  const handleImportFile = async (file: File | null) => {
-    if (!file) return;
+  const importFromRawJson = (raw: string) => {
     try {
-      const raw = await file.text();
       const parsed = JSON.parse(raw) as unknown;
       const result = importEntries(parsed, 'merge');
 
       if (result.imported === 0) {
         toast.error('No valid log data found in this file.');
-        return;
+        return false;
       }
 
       toast.success(
@@ -650,11 +650,33 @@ export default function LogPage() {
           description: result.skipped > 0 ? `Skipped ${result.skipped} invalid item${result.skipped > 1 ? 's' : ''}.` : undefined,
         }
       );
+      return true;
     } catch {
       toast.error('Invalid backup file. Use a JSON exported from this app.');
+      return false;
+    }
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      importFromRawJson(raw);
+    } catch {
+      toast.error('Could not read file. Try again.');
     } finally {
       if (importInputRef.current) importInputRef.current.value = '';
     }
+  };
+
+  const handleImportPastedJson = () => {
+    const raw = pastedJson.trim();
+    if (!raw) {
+      toast.error('Paste JSON first.');
+      return;
+    }
+    const ok = importFromRawJson(raw);
+    if (ok) setPastedJson('');
   };
 
   const preferenceInsights = useMemo(() => {
@@ -785,22 +807,60 @@ export default function LogPage() {
           ))}
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2 rounded-lg border border-border bg-muted/20 p-2">
           <button
-            onClick={openImportPicker}
-            className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+            onClick={() => setShowImportTools(v => !v)}
+            className="w-full flex items-center justify-between gap-2"
           >
-            <Upload size={11} />
-            Import Logs (JSON)
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
+              <Upload size={12} className="text-emerald-600" />
+              Import Logs (JSON)
+            </span>
+            <span className="text-[10px] font-medium text-muted-foreground inline-flex items-center gap-1">
+              {showImportTools ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showImportTools ? 'Hide' : 'Open'}
+            </span>
           </button>
-          <span className="text-[10px] text-muted-foreground">Use a JSON file exported from Export tab.</span>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
-          />
+
+          {showImportTools && (
+            <div className="mt-2 animate-fade-slide-up">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={openImportPicker}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                >
+                  <Upload size={11} />
+                  Choose JSON File
+                </button>
+                <span className="text-[10px] text-muted-foreground">From Export tab, or paste JSON below.</span>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+
+              <div className="mt-2 rounded-md border border-border bg-white/70 p-2">
+                <p className="text-[10px] text-muted-foreground mb-1">Paste JSON backup (optional)</p>
+                <textarea
+                  value={pastedJson}
+                  onChange={(e) => setPastedJson(e.target.value)}
+                  placeholder="Paste exported JSON here..."
+                  className="w-full min-h-20 rounded-md border border-border bg-white px-2 py-1.5 text-[11px] font-mono-custom"
+                />
+                <div className="mt-1.5 flex justify-end">
+                  <button
+                    onClick={handleImportPastedJson}
+                    className="h-7 px-2.5 rounded-md border border-primary/30 bg-primary/10 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
+                  >
+                    Import Pasted JSON
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
