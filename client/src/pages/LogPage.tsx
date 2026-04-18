@@ -4,7 +4,7 @@
 // =============================================================
 
 import { useMemo, useRef, useState } from 'react';
-import { Camera, Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag } from 'lucide-react';
+import { Camera, Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -621,11 +621,41 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
 }
 
 export default function LogPage() {
-  const { entries } = useCoffee();
+  const { entries, importEntries } = useCoffee();
   const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showPreferenceInsights, setShowPreferenceInsights] = useState(false);
   const [modeView, setModeView] = useState<'all' | 'tasting' | 'brewing' | 'pad'>('all');
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const openImportPicker = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw) as unknown;
+      const result = importEntries(parsed, 'merge');
+
+      if (result.imported === 0) {
+        toast.error('No valid log data found in this file.');
+        return;
+      }
+
+      toast.success(
+        `Imported ${result.imported} log entr${result.imported > 1 ? 'ies' : 'y'} from JSON.`,
+        {
+          description: result.skipped > 0 ? `Skipped ${result.skipped} invalid item${result.skipped > 1 ? 's' : ''}.` : undefined,
+        }
+      );
+    } catch {
+      toast.error('Invalid backup file. Use a JSON exported from this app.');
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const preferenceInsights = useMemo(() => {
     if (entries.length === 0) return null;
@@ -753,6 +783,24 @@ export default function LogPage() {
               {view.label}
             </button>
           ))}
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={openImportPicker}
+            className="inline-flex items-center gap-1.5 px-2 py-1 text-[10px] rounded-full border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+          >
+            <Upload size={11} />
+            Import Logs (JSON)
+          </button>
+          <span className="text-[10px] text-muted-foreground">Use a JSON file exported from Export tab.</span>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+          />
         </div>
       </div>
 

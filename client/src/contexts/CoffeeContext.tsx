@@ -23,6 +23,7 @@ interface CoffeeContextValue {
   updateEntry: (id: string, updates: Partial<CoffeeEntry>) => void;
   deleteEntry: (id: string) => void;
   toggleFavorite: (id: string) => void;
+  importEntries: (incoming: unknown, mode?: 'merge' | 'replace') => { imported: number; skipped: number };
 
   // Current draft entry being edited
   draft: CoffeeEntry;
@@ -60,6 +61,52 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   const [isEditingExisting, setIsEditingExisting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('taste');
 
+  const normalizeImportedEntry = useCallback((entry: Partial<CoffeeEntry>, fallbackIndex: number): CoffeeEntry | null => {
+    const scores = entry.scores as Partial<TastingScores> | undefined;
+    if (!scores) return null;
+
+    const scoreKeys: (keyof TastingScores)[] = ['fragrance', 'aroma', 'acidity', 'sweetness', 'flavor', 'mouthfeel', 'aftertaste', 'overall'];
+    const normalizedScores = scoreKeys.reduce((acc, key) => {
+      const raw = Number(scores[key]);
+      const value = Number.isFinite(raw) ? Math.max(0, Math.min(9, raw)) : 0;
+      acc[key] = value;
+      return acc;
+    }, {} as TastingScores);
+
+    const base = createEmptyEntry(fallbackIndex);
+    const now = new Date().toISOString();
+
+    return {
+      ...base,
+      ...entry,
+      id: typeof entry.id === 'string' && entry.id.trim() ? entry.id : `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      sampleIndex: typeof entry.sampleIndex === 'string' && entry.sampleIndex.trim() ? entry.sampleIndex : base.sampleIndex,
+      name: typeof entry.name === 'string' ? entry.name : '',
+      origin: typeof entry.origin === 'string' ? entry.origin : '',
+      process: typeof entry.process === 'string' ? entry.process : base.process,
+      altitude: typeof entry.altitude === 'string' ? entry.altitude : base.altitude,
+      roastLevel: typeof entry.roastLevel === 'string' ? entry.roastLevel : base.roastLevel,
+      roaster: typeof entry.roaster === 'string' ? entry.roaster : '',
+      notes: typeof entry.notes === 'string' ? entry.notes : '',
+      entryMode: entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting'),
+      isBlindMode: entry.isBlindMode ?? (entry.notes ?? '').includes('[Blind Mode]'),
+      focusedAttributes: Array.isArray(entry.focusedAttributes) ? entry.focusedAttributes.filter(Boolean) : [],
+      aromaDescriptors: Array.isArray(entry.aromaDescriptors) ? entry.aromaDescriptors.filter(Boolean) : [],
+      sweetnessDescriptors: Array.isArray(entry.sweetnessDescriptors) ? entry.sweetnessDescriptors.filter(Boolean) : [],
+      sweetnessDetailDescriptors: Array.isArray(entry.sweetnessDetailDescriptors) ? entry.sweetnessDetailDescriptors.filter(Boolean) : [],
+      acidityDescriptors: Array.isArray(entry.acidityDescriptors) ? entry.acidityDescriptors.filter(Boolean) : [],
+      acidityTypeDescriptors: Array.isArray(entry.acidityTypeDescriptors) ? entry.acidityTypeDescriptors.filter(Boolean) : [],
+      intensityDescriptors: Array.isArray(entry.intensityDescriptors) ? entry.intensityDescriptors.filter(Boolean) : [],
+      mouthfeelDescriptors: Array.isArray(entry.mouthfeelDescriptors) ? entry.mouthfeelDescriptors.filter(Boolean) : [],
+      aftertasteDescriptors: Array.isArray(entry.aftertasteDescriptors) ? entry.aftertasteDescriptors.filter(Boolean) : [],
+      overallDescriptors: Array.isArray(entry.overallDescriptors) ? entry.overallDescriptors.filter(Boolean) : [],
+      scores: normalizedScores,
+      totalScore: calculateTotalScore(normalizedScores),
+      createdAt: typeof entry.createdAt === 'string' && entry.createdAt ? entry.createdAt : now,
+      updatedAt: typeof entry.updatedAt === 'string' && entry.updatedAt ? entry.updatedAt : now,
+    };
+  }, []);
+
   // Persist entries to localStorage whenever they change
   useEffect(() => {
     saveEntries(entries);
@@ -89,6 +136,35 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
       e.id === id ? { ...e, isFavorite: !e.isFavorite, updatedAt: new Date().toISOString() } : e
     ));
   }, []);
+
+  const importEntries = useCallback((incoming: unknown, mode: 'merge' | 'replace' = 'merge') => {
+    if (!Array.isArray(incoming)) return { imported: 0, skipped: 0 };
+
+    const normalized = incoming
+      .map((item, idx) => normalizeImportedEntry(item as Partial<CoffeeEntry>, entries.length + idx + 1))
+      .filter((item): item is CoffeeEntry => Boolean(item));
+
+    const skipped = incoming.length - normalized.length;
+
+    if (normalized.length === 0) {
+      return { imported: 0, skipped };
+    }
+
+    if (mode === 'replace') {
+      const sorted = [...normalized].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      setEntries(sorted);
+      return { imported: sorted.length, skipped };
+    }
+
+    const existingIds = new Set(entries.map(e => e.id));
+    const incomingMerged = normalized.map((entry, idx) => {
+      if (!existingIds.has(entry.id)) return entry;
+      return { ...entry, id: `${entry.id}-import-${idx + 1}` };
+    });
+    const merged = [...incomingMerged, ...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    setEntries(merged);
+    return { imported: incomingMerged.length, skipped };
+  }, [entries, normalizeImportedEntry]);
 
   const toggleFocusedAttribute = useCallback((key: keyof TastingScores) => {
     setDraft(prev => {
@@ -216,7 +292,7 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <CoffeeContext.Provider value={{
-      entries, addEntry, updateEntry, deleteEntry, toggleFavorite,
+      entries, addEntry, updateEntry, deleteEntry, toggleFavorite, importEntries,
       draft, setDraft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors,
       toggleFocusedAttribute,
       saveDraft, resetDraft, editEntry, isEditingExisting,
