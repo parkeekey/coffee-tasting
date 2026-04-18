@@ -162,6 +162,11 @@ export default function TastePadPage() {
     setActiveCupIndex(prev => Math.min(prev, clamped - 1));
   };
 
+  const cycleActiveCup = () => {
+    if (cupCount <= 1) return;
+    setActiveCupIndex(prev => (prev + 1) % cupCount);
+  };
+
   const toggleFocusAttribute = (attr: PadScoreKey) => {
     updateCup(activeCupIndex, (cup) => {
       const updated = new Set(cup.focusedAttributes);
@@ -202,6 +207,7 @@ export default function TastePadPage() {
   };
 
   const resetOne = (key: PadScoreKey) => setTap(key, MEDIUM_TAP);
+  const resetAxisOne = (key: PadScoreKey) => setTap(key, EMPTY_TAP);
 
   const mappedScores: TastingScores = useMemo(() => ({
     fragrance: TAP_TO_SCORE[activeCup.taps.fragrance],
@@ -217,22 +223,47 @@ export default function TastePadPage() {
   const hasUnassigned = Object.values(activeCup.taps).some(value => value === 0);
   const hasUnassignedAnyCup = cups.slice(0, cupCount).some(cup => Object.values(cup.taps).some(value => value === 0));
 
-  const effectiveScores: TastingScores = useMemo(() => ({
-    fragrance: mappedScores.fragrance || 6,
-    aroma: mappedScores.aroma || 6,
-    acidity: mappedScores.acidity || 6,
-    sweetness: mappedScores.sweetness || 6,
-    mouthfeel: mappedScores.mouthfeel || 6,
-    aftertaste: mappedScores.aftertaste || 6,
-    flavor: mappedScores.flavor || 6,
-    overall: mappedScores.overall || 6,
-  }), [mappedScores]);
-
   const totalScore = hasUnassigned ? null : calculateTotalScore(mappedScores);
 
-  // Cross-map marker: x = sweetness vs acidity, y = mouthfeel vs aftertaste
-  const x = ((effectiveScores.sweetness - effectiveScores.acidity) / 6) * 44; // -44 to +44
-  const y = ((effectiveScores.mouthfeel - effectiveScores.aftertaste) / 6) * 44; // -44 to +44
+  const radar = useMemo(() => {
+    const center = 70;
+    const radius = 56;
+
+    const values = {
+      mouthfeel: mappedScores.mouthfeel,
+      sweetness: mappedScores.sweetness,
+      aftertaste: mappedScores.aftertaste,
+      acidity: mappedScores.acidity,
+    } as const;
+
+    const pointAt = (dx: number, dy: number, score: number) => {
+      const ratio = Math.max(0, Math.min(1, score / 9));
+      return {
+        x: center + dx * radius * ratio,
+        y: center + dy * radius * ratio,
+      };
+    };
+
+    const pMouth = pointAt(0, -1, values.mouthfeel);
+    const pSweet = pointAt(1, 0, values.sweetness);
+    const pAfter = pointAt(0, 1, values.aftertaste);
+    const pAcid = pointAt(-1, 0, values.acidity);
+
+    const valuePolygon = `${pMouth.x},${pMouth.y} ${pSweet.x},${pSweet.y} ${pAfter.x},${pAfter.y} ${pAcid.x},${pAcid.y}`;
+    const gridLevels = [0.25, 0.5, 0.75, 1].map(level => {
+      const r = radius * level;
+      return `${center},${center - r} ${center + r},${center} ${center},${center + r} ${center - r},${center}`;
+    });
+
+    return {
+      center,
+      radius,
+      points: { mouthfeel: pMouth, sweetness: pSweet, aftertaste: pAfter, acidity: pAcid },
+      valuePolygon,
+      gridLevels,
+      values,
+    };
+  }, [mappedScores.acidity, mappedScores.aftertaste, mappedScores.mouthfeel, mappedScores.sweetness]);
 
   const resetAll = () => {
     setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
@@ -497,9 +528,21 @@ export default function TastePadPage() {
 
         {/* Cross map */}
         <div className="rounded-xl border border-border bg-white p-3">
-          <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5">
             <Crosshair size={13} className="text-primary" />
-            <p className="text-xs font-semibold text-foreground">Taste Cross Map (one-hand)</p>
+            <p className="text-xs font-semibold text-foreground">Taste Radar Map (0-9)</p>
+            </div>
+            <button
+              onClick={cycleActiveCup}
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-semibold text-primary whitespace-nowrap hover:bg-primary/10 transition-colors"
+              title={cupCount > 1 ? 'Tap to cycle cup' : 'Only 1 cup'}
+              type="button"
+            >
+              <span>Cup {activeCupIndex + 1}</span>
+              <span className="text-primary/60">•</span>
+              <span className="max-w-[110px] truncate">{activeCup.sampleName.trim() || activeCup.sampleCode.trim() || `Untitled`}</span>
+            </button>
           </div>
 
           <div className="relative w-full max-w-[390px] h-[280px] mx-auto">
@@ -551,19 +594,38 @@ export default function TastePadPage() {
               <span className="text-[10px] font-mono-custom font-bold px-1 py-0.5 bg-muted/40 rounded border border-border text-foreground">{TAP_TO_SCORE[activeCup.taps.sweetness]}/9 {levelLabel(activeCup.taps.sweetness)}</span>
             </button>
 
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[140px] h-[140px] rounded-xl bg-muted/40 border border-border overflow-hidden z-0">
-              <div className="absolute left-1/2 top-0 bottom-0 w-px bg-border" />
-              <div className="absolute top-1/2 left-0 right-0 h-px bg-border" />
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[140px] h-[140px] rounded-xl bg-muted/30 border border-border overflow-hidden z-0 p-1">
+              <svg viewBox="0 0 140 140" className="w-full h-full">
+                {radar.gridLevels.map((level, idx) => (
+                  <polygon
+                    key={idx}
+                    points={level}
+                    fill="none"
+                    stroke="currentColor"
+                    className="text-border"
+                    strokeWidth={idx === radar.gridLevels.length - 1 ? 1.2 : 1}
+                  />
+                ))}
+                <line x1={radar.center} y1={radar.center - radar.radius} x2={radar.center} y2={radar.center + radar.radius} stroke="currentColor" className="text-border" strokeWidth="1" />
+                <line x1={radar.center - radar.radius} y1={radar.center} x2={radar.center + radar.radius} y2={radar.center} stroke="currentColor" className="text-border" strokeWidth="1" />
 
-              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">Acid</span>
-              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">Sweet</span>
-              <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-muted-foreground">Mouthfeel</span>
-              <span className="absolute left-1/2 bottom-1 -translate-x-1/2 text-[9px] text-muted-foreground">Aftertaste</span>
+                <polygon
+                  points={radar.valuePolygon}
+                  fill="oklch(0.64 0.13 45 / 0.28)"
+                  stroke="oklch(0.58 0.14 45)"
+                  strokeWidth="2"
+                  className="transition-all duration-300 ease-out"
+                />
 
-              <div
-                className="absolute w-4 h-4 rounded-full bg-primary border-2 border-white shadow"
-                style={{ left: `calc(50% + ${x}px - 8px)`, top: `calc(50% - ${y}px - 8px)` }}
-              />
+                {Object.values(radar.points).map((p, i) => (
+                  <circle key={i} cx={p.x} cy={p.y} r="3.2" fill="oklch(0.58 0.14 45)" className="animate-pulse" />
+                ))}
+              </svg>
+
+              <span className="absolute left-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">Acid {radar.values.acidity}</span>
+              <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">Sweet {radar.values.sweetness}</span>
+              <span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] text-muted-foreground">Mouth {radar.values.mouthfeel}</span>
+              <span className="absolute left-1/2 bottom-1 -translate-x-1/2 text-[9px] text-muted-foreground">After {radar.values.aftertaste}</span>
             </div>
           </div>
 
@@ -571,19 +633,39 @@ export default function TastePadPage() {
             <div className="rounded-lg border border-border bg-muted/20 p-2">
               <p className="text-[10px] text-muted-foreground mb-1">Axis helpers</p>
               <div className="flex flex-wrap gap-1 text-[10px]">
-                <button onClick={() => resetOne('acidity')} className="px-2 py-1 rounded bg-white border border-border">Reset Acid</button>
-                <button onClick={() => resetOne('sweetness')} className="px-2 py-1 rounded bg-white border border-border">Reset Sweet</button>
-                <button onClick={() => resetOne('mouthfeel')} className="px-2 py-1 rounded bg-white border border-border">Reset Mouth</button>
-                <button onClick={() => resetOne('aftertaste')} className="px-2 py-1 rounded bg-white border border-border">Reset After</button>
+                <button onClick={() => resetAxisOne('acidity')} className="px-2 py-1 rounded bg-white border border-border">Reset Acid</button>
+                <button onClick={() => resetAxisOne('sweetness')} className="px-2 py-1 rounded bg-white border border-border">Reset Sweet</button>
+                <button onClick={() => resetAxisOne('mouthfeel')} className="px-2 py-1 rounded bg-white border border-border">Reset Mouth</button>
+                <button onClick={() => resetAxisOne('aftertaste')} className="px-2 py-1 rounded bg-white border border-border">Reset After</button>
               </div>
             </div>
             <div className="rounded-lg border border-border bg-muted/20 p-2">
-              <p className="text-[10px] text-muted-foreground mb-1">Fine control</p>
+              <p className="text-[10px] text-muted-foreground mb-1">Focus control</p>
               <div className="grid grid-cols-2 gap-1 text-[10px]">
-                <button onClick={() => decrease('acidity')} className="px-2 py-1 rounded bg-white border border-border">- Acid</button>
-                <button onClick={() => decrease('sweetness')} className="px-2 py-1 rounded bg-white border border-border">- Sweet</button>
-                <button onClick={() => decrease('mouthfeel')} className="px-2 py-1 rounded bg-white border border-border">- Mouth</button>
-                <button onClick={() => decrease('aftertaste')} className="px-2 py-1 rounded bg-white border border-border">- After</button>
+                <button
+                  onClick={() => toggleFocusAttribute('acidity')}
+                  className={`px-2 py-1 rounded border transition-colors ${isFocused('acidity') ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border'}`}
+                >
+                  Acid
+                </button>
+                <button
+                  onClick={() => toggleFocusAttribute('sweetness')}
+                  className={`px-2 py-1 rounded border transition-colors ${isFocused('sweetness') ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border'}`}
+                >
+                  Sweet
+                </button>
+                <button
+                  onClick={() => toggleFocusAttribute('mouthfeel')}
+                  className={`px-2 py-1 rounded border transition-colors ${isFocused('mouthfeel') ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border'}`}
+                >
+                  Mouth
+                </button>
+                <button
+                  onClick={() => toggleFocusAttribute('aftertaste')}
+                  className={`px-2 py-1 rounded border transition-colors ${isFocused('aftertaste') ? 'bg-primary/10 border-primary text-primary' : 'bg-white border-border'}`}
+                >
+                  After
+                </button>
               </div>
             </div>
           </div>
