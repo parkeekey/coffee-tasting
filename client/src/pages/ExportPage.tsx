@@ -362,7 +362,7 @@ export default function ExportPage() {
                 onClick={() => setPngTagDetailMode('compact')}
                 className="h-8 text-xs"
               >
-                Chips only (sub-tags)
+                compact version
               </Button>
               <Button
                 type="button"
@@ -371,7 +371,7 @@ export default function ExportPage() {
                 onClick={() => setPngTagDetailMode('full')}
                 className="h-8 text-xs"
               >
-                Context columns (default)
+                full context
               </Button>
             </div>
           </div>
