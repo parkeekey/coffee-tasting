@@ -42,6 +42,15 @@ export interface BrewPour {
   action?: string;     // action note (e.g. swirl, stir, wait)
 }
 
+export interface PadCupData {
+  index: number;       // Cup number (1, 2, 3...)
+  sampleName: string;
+  sampleCode: string;
+  notes: string;
+  scores: TastingScores;
+  totalScore: number;
+}
+
 export interface CoffeeEntry {
   id: string;
   sampleIndex: string;       // e.g. "S-01"
@@ -94,6 +103,7 @@ export interface CoffeeEntry {
   mouthfeelDescriptors: string[];  // selected mouthfeel descriptors
   aftertasteDescriptors: string[];  // selected aftertaste length descriptors
   overallDescriptors: string[];  // selected overall profile descriptors
+  padCups?: PadCupData[];    // multi-cup pad mode data (stored with first cup only)
   createdAt: string;         // ISO date string
   updatedAt: string;
 }

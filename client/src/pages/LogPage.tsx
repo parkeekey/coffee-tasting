@@ -20,23 +20,101 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { calculateExtractionYieldPercent, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
   const [expanded, setExpanded] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [padViewMode, setPadViewMode] = useState<'detail' | 'grid-2x2' | 'grid-3x3'>('detail');
   const cardRef = useRef<HTMLDivElement>(null);
   const color = getScoreHex(entry.totalScore);
   const mode = entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
   const isTastePadEntry = mode === 'pad';
   const isBrewingEntry = mode === 'brewing';
   const isBlindModeEntry = entry.isBlindMode ?? (entry.notes ?? '').includes('[Blind Mode]');
+  const normalizedPadCups = useMemo(() => {
+    const clampScore = (value: unknown) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return 0;
+      return Math.max(0, Math.min(9, numeric));
+    };
+
+    return (entry.padCups ?? []).map((cup, idx) => {
+      const scores = {
+        fragrance: clampScore(cup?.scores?.fragrance),
+        aroma: clampScore(cup?.scores?.aroma),
+        acidity: clampScore(cup?.scores?.acidity),
+        sweetness: clampScore(cup?.scores?.sweetness),
+        flavor: clampScore(cup?.scores?.flavor),
+        mouthfeel: clampScore(cup?.scores?.mouthfeel),
+        aftertaste: clampScore(cup?.scores?.aftertaste),
+        overall: clampScore(cup?.scores?.overall),
+      };
+
+      const index = Number.isFinite(Number(cup?.index)) ? Number(cup?.index) : idx + 1;
+      const totalScore = Number.isFinite(Number(cup?.totalScore))
+        ? Number(cup?.totalScore)
+        : calculateTotalScore(scores);
+
+      return {
+        ...cup,
+        index,
+        sampleName: cup?.sampleName ?? '',
+        scores,
+        totalScore,
+      };
+    });
+  }, [entry.padCups]);
+  const blindSessionHighlights = useMemo(() => {
+    if (normalizedPadCups.length === 0) return [];
+
+    const targets = [
+      { key: 'fragrance', label: 'Fragrance', emoji: '🌸' },
+      { key: 'aroma', label: 'Aroma', emoji: '👃' },
+      { key: 'acidity', label: 'Acidity', emoji: '🍋' },
+      { key: 'sweetness', label: 'Sweetness', emoji: '🍬' },
+      { key: 'flavor', label: 'Flavor', emoji: '👅' },
+      { key: 'mouthfeel', label: 'Mouthfeel', emoji: '☕' },
+      { key: 'aftertaste', label: 'Aftertaste', emoji: '✨' },
+      { key: 'overall', label: 'Overall', emoji: '🌟' },
+    ] as const;
+
+    return targets.map((target) => {
+      let maxValue = -1;
+      let cupIndexes: number[] = [];
+
+      normalizedPadCups.forEach((cup, idx) => {
+        const score = cup.scores[target.key];
+        if (score > maxValue) {
+          maxValue = score;
+          cupIndexes = [Number.isFinite(cup.index) ? cup.index : idx + 1];
+          return;
+        }
+        if (score === maxValue) {
+          cupIndexes.push(Number.isFinite(cup.index) ? cup.index : idx + 1);
+        }
+      });
+
+      return {
+        ...target,
+        maxValue,
+        cupIndexes,
+      };
+    });
+  }, [normalizedPadCups]);
 
   const handleEdit = () => {
     editEntry(entry.id);
-    setActiveTab('taste');
-    toast.info(`Editing ${entry.sampleIndex} — ${entry.name}`);
+    
+    // Multi-cup pad entries go to TastePadPage
+    if (isTastePadEntry && entry.padCups && entry.padCups.length > 1) {
+      setActiveTab('pad');
+      toast.info(`Editing blind test with ${entry.padCups.length} cups`);
+    } else {
+      setActiveTab('taste');
+      toast.info(`Editing ${entry.sampleIndex} — ${entry.name}`);
+    }
   };
 
   const handleDelete = () => {
@@ -181,54 +259,182 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
       {/* Expandable detail */}
       {expanded && (
         <div className="px-3 pb-3 border-t border-border/50 pt-2 animate-fade-slide-up">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
-            {SCORE_ATTRIBUTES.map(attr => {
-              const { label: lvl, color: lvlColor } = getAttributeLabel(entry.scores[attr.key]);
-              const sensoryNote = (entry.sensoryNotes?.[attr.key] ?? '').trim();
-              const reaction = entry.sensoryReactions?.[attr.key] ?? '';
-              return (
-                <div key={attr.key} className="space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{attr.emoji} {attr.label}</span>
-                    <div className="flex items-center gap-1">
-                      <span
-                        className="text-[9px] font-medium px-1 py-0.5 rounded"
-                        style={{ backgroundColor: `${lvlColor}18`, color: lvlColor }}
-                      >
-                        {lvl}
-                      </span>
-                      <span className="text-xs font-mono-custom font-bold text-foreground">
-                        {entry.scores[attr.key]}/9
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {reaction === 'like' && (
-                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-emerald-700 border-emerald-300 bg-emerald-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
-                        <span>👍</span>
-                        <span>Like</span>
-                      </span>
-                    )}
-                    {reaction === 'soso' && (
-                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-amber-700 border-amber-300 bg-amber-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
-                        <span>😐</span>
-                        <span>So-so</span>
-                      </span>
-                    )}
-                    {reaction === 'dislike' && (
-                      <span className="h-5 px-1.5 rounded border text-[9px] font-semibold text-rose-700 border-rose-300 bg-rose-50 inline-flex items-center gap-1 whitespace-nowrap shrink-0 leading-none">
-                        <span>👎</span>
-                        <span>Dislike</span>
-                      </span>
-                    )}
-                  </div>
-                  {sensoryNote && (
-                    <p className="text-[10px] text-muted-foreground italic">↳ {sensoryNote}</p>
-                  )}
+          {/* Multi-cup Taste Pad display with radar graphs */}
+          {normalizedPadCups.length > 0 && (
+            <div className="mb-3 p-3 bg-cyan-50 rounded-lg border border-cyan-200">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-xs text-cyan-900 font-semibold">☕ {normalizedPadCups.length} Cup Blind Test</p>
+                <div className="inline-flex items-center rounded-md border border-cyan-200 bg-white p-0.5 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPadViewMode('detail')}
+                    className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+                      padViewMode === 'detail'
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-cyan-700 hover:bg-cyan-50'
+                    }`}
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPadViewMode('grid-2x2')}
+                    className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+                      padViewMode === 'grid-2x2'
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-cyan-700 hover:bg-cyan-50'
+                    }`}
+                  >
+                    2x2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPadViewMode('grid-3x3')}
+                    className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+                      padViewMode === 'grid-3x3'
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-cyan-700 hover:bg-cyan-50'
+                    }`}
+                  >
+                    3x3
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+              
+              {/* Taste Pad map grid */}
+              <div className={`grid gap-2 mb-3 ${
+                padViewMode === 'grid-2x2' ? 'grid-cols-2' :
+                padViewMode === 'grid-3x3' ? 'grid-cols-3' :
+                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              }`}>
+                {normalizedPadCups.map((cup) => {
+                  const cupColor = getScoreHex(cup.totalScore);
+                  const center = 70;
+                  const radius = 56;
+                  
+                  // Same axis as pad mode: top=mouthfeel, right=sweetness, bottom=aftertaste, left=acidity
+                  const mouthfeel = cup.scores.mouthfeel;
+                  const sweetness = cup.scores.sweetness;
+                  const aftertaste = cup.scores.aftertaste;
+                  const acidity = cup.scores.acidity;
+                  
+                  const ratioMouth = Math.max(0, Math.min(1, mouthfeel / 9));
+                  const ratioSweet = Math.max(0, Math.min(1, sweetness / 9));
+                  const ratioAfter = Math.max(0, Math.min(1, aftertaste / 9));
+                  const ratioAcid = Math.max(0, Math.min(1, acidity / 9));
+                  
+                  const pMouth = { x: center, y: center - radius * ratioMouth };
+                  const pSweet = { x: center + radius * ratioSweet, y: center };
+                  const pAfter = { x: center, y: center + radius * ratioAfter };
+                  const pAcid = { x: center - radius * ratioAcid, y: center };
+                  
+                  const polygon = `${pMouth.x},${pMouth.y} ${pSweet.x},${pSweet.y} ${pAfter.x},${pAfter.y} ${pAcid.x},${pAcid.y}`;
+                  
+                  const getScoreLabel = (score: number) => {
+                    if (score === 0) return 'None';
+                    if (score === 3) return 'Low';
+                    if (score === 6) return 'Med';
+                    if (score === 9) return 'High';
+                    return score.toString();
+                  };
+                  
+                  const intensity = cup.scores.flavor;
+                  const clarity = cup.scores.overall;
+
+                  return (
+                    <div key={cup.index} className={`bg-white rounded-lg border border-cyan-100 ${padViewMode === 'detail' ? 'p-2' : 'p-1.5'}`}>
+                      <div className={`text-center ${padViewMode === 'detail' ? 'mb-2' : 'mb-1'}`}>
+                        <div className={`font-semibold text-cyan-700 ${padViewMode === 'detail' ? 'text-xs' : 'text-[9px]'}`}>Cup {cup.index}</div>
+                        {cup.sampleName && (
+                          <div className={`text-muted-foreground truncate ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[8px]'}`} title={cup.sampleName}>{cup.sampleName}</div>
+                        )}
+                      </div>
+                      
+                      {/* Pad-style map */}
+                      <svg viewBox="0 0 140 140" className="w-full h-auto" style={{ maxWidth: padViewMode === 'detail' ? '130px' : '80px', margin: '0 auto', display: 'block', marginBottom: padViewMode === 'detail' ? '8px' : '4px' }}>
+                        {[0.25, 0.5, 0.75, 1].map((level) => {
+                          const r = radius * level;
+                          const points = `${center},${center - r} ${center + r},${center} ${center},${center + r} ${center - r},${center}`;
+                          return (
+                            <polygon
+                              key={level}
+                              points={points}
+                              fill="none"
+                              stroke="#e5e7eb"
+                              strokeWidth={level === 1 ? 1.2 : 1}
+                            />
+                          );
+                        })}
+                        
+                        {/* Axes */}
+                        <line x1={center} y1={center - radius} x2={center} y2={center + radius} stroke="#d1d5db" strokeWidth="1" />
+                        <line x1={center - radius} y1={center} x2={center + radius} y2={center} stroke="#d1d5db" strokeWidth="1" />
+                        
+                        {/* Polygon */}
+                        <polygon points={polygon} fill={cupColor} fillOpacity="0.28" stroke={cupColor} strokeWidth="2" />
+                        
+                        {/* Data points */}
+                        <circle cx={pMouth.x} cy={pMouth.y} r="3" fill={cupColor} />
+                        <circle cx={pSweet.x} cy={pSweet.y} r="3" fill={cupColor} />
+                        <circle cx={pAfter.x} cy={pAfter.y} r="3" fill={cupColor} />
+                        <circle cx={pAcid.x} cy={pAcid.y} r="3" fill={cupColor} />
+                        
+                        {/* Center dot */}
+                        <circle cx={center} cy={center} r="1" fill="#6b7280" />
+                        
+                        {/* Labels */}
+                        <text x={center} y={center - radius - 4} fontSize="12" textAnchor="middle" fill="#6b7280">☕</text>
+                        <text x={center + radius + 5} y={center + 4} fontSize="12" textAnchor="start" fill="#6b7280">🍬</text>
+                        <text x={center} y={center + radius + 13} fontSize="12" textAnchor="middle" fill="#6b7280">✨</text>
+                        <text x={center - radius - 5} y={center + 4} fontSize="12" textAnchor="end" fill="#6b7280">🍋</text>
+                      </svg>
+                      
+                      {/* 4 sensory attributes: Acid, Sweet, Mouthfeel, Aftertaste */}
+                      <div className={`grid grid-cols-2 gap-x-2 gap-y-0.5 ${padViewMode === 'detail' ? 'mt-1' : 'mt-0.5'}`}>
+                        {[
+                          { emoji: '🍋', label: 'Acidity',    val: acidity },
+                          { emoji: '🍬', label: 'Sweetness',  val: sweetness },
+                          { emoji: '☕', label: 'Mouthfeel',  val: mouthfeel },
+                          { emoji: '✨', label: 'Aftertaste', val: aftertaste },
+                        ].map(({ emoji, label, val }) => (
+                          <div key={label} className={`flex items-center justify-between rounded px-1 ${padViewMode === 'detail' ? 'py-0.5 bg-cyan-50' : 'py-0.25 bg-cyan-100/50'}`}>
+                            <span className={`text-slate-600 font-medium ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>{emoji} {label}</span>
+                            <span className={`font-bold text-cyan-700 ml-0.5 ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>{val}/9</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Intensity & Clarity row */}
+                      <div className={`grid grid-cols-2 gap-x-2 ${padViewMode === 'detail' ? 'mt-1' : 'mt-0.5'}`}>
+                        <div className={`flex items-center justify-between rounded px-1 ${padViewMode === 'detail' ? 'py-0.5 bg-amber-50' : 'py-0.25 bg-amber-100/50'}`}>
+                          <span className={`text-slate-600 font-medium ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>⚡ Intensity</span>
+                          <span className={`font-bold text-amber-700 ml-0.5 ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>{intensity}/9</span>
+                        </div>
+                        <div className={`flex items-center justify-between rounded px-1 ${padViewMode === 'detail' ? 'py-0.5 bg-sky-50' : 'py-0.25 bg-sky-100/50'}`}>
+                          <span className={`text-slate-600 font-medium ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>🌟 Clarity</span>
+                          <span className={`font-bold text-sky-700 ml-0.5 ${padViewMode === 'detail' ? 'text-[9px]' : 'text-[7px]'}`}>{clarity}/9</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-lg border border-cyan-200 bg-white p-2">
+                <p className="text-[11px] font-semibold text-cyan-900 mb-1">Highest Sensory Attribute</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                  {blindSessionHighlights.map((item) => (
+                    <p key={item.key} className="text-[10px] text-cyan-900">
+                      <span className="font-semibold">{item.emoji} {item.label}</span>
+                      <span className="text-cyan-700">: Cup {item.cupIndexes.join(', ')} ({item.maxValue}/9)</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+
           {entry.altitude && (
             <p className="text-xs text-muted-foreground">Altitude: {entry.altitude}</p>
           )}

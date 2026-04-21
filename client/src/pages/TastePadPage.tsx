@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Plus, Minus, RotateCcw, Save, EyeOff, Eye, Crosshair } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -133,7 +133,7 @@ function GestureButton({
 }
 
 export default function TastePadPage() {
-  const { entries, addEntry, setActiveTab } = useCoffee();
+  const { entries, addEntry, setActiveTab, draft, isEditingExisting, resetDraft, updateEntry } = useCoffee();
 
   const [blindMode, setBlindMode] = useState(true);
   const [cupCount, setCupCount] = useState(1);
@@ -145,6 +145,41 @@ export default function TastePadPage() {
   const [altitude, setAltitude] = useState(ALTITUDE_OPTIONS[2]);
   const [roastLevel, setRoastLevel] = useState(ROAST_OPTIONS[2]);
   const [roaster, setRoaster] = useState('');
+
+  // Load from draft if editing a multi-cup pad entry
+  useEffect(() => {
+    if (isEditingExisting && draft.padCups && draft.padCups.length > 0) {
+      const padCups = draft.padCups;
+      setBlindMode(draft.isBlindMode ?? false);
+      setCupCount(padCups.length);
+      setOrigin(draft.origin);
+      setProcess(draft.process as any);
+      setAltitude(draft.altitude as any);
+      setRoastLevel(draft.roastLevel as any);
+      setRoaster(draft.roaster);
+
+      // Reconstruct cup states from padCups
+      const reconstructedCups = padCups.map((padCup) => {
+        const tapscores = Object.entries(padCup.scores).reduce((acc, [key, val]) => {
+          const tapLevel = Math.max(0, Math.min(3, Math.round((val - 3) / 3) + 1)) as TapLevel;
+          acc[key as PadScoreKey] = tapLevel;
+          return acc;
+        }, {} as Record<PadScoreKey, TapLevel>);
+
+        return {
+          sampleName: padCup.sampleName,
+          sampleCode: padCup.sampleCode,
+          notes: '',
+          taps: tapscores,
+          focusedAttributes: new Set<PadScoreKey>(),
+        };
+      });
+
+      setCups(reconstructedCups);
+      setActiveCupIndex(0);
+    }
+  }, [isEditingExisting, draft]);
+
   const activeCup = cups[activeCupIndex] ?? createInitialCupState();
 
   const updateCup = (index: number, updater: (prev: PadCupState) => PadCupState) => {
@@ -220,8 +255,10 @@ export default function TastePadPage() {
     overall: TAP_TO_SCORE[activeCup.taps.overall], // clarity
   }), [activeCup.taps]);
 
-  const hasUnassigned = Object.values(activeCup.taps).some(value => value === 0);
-  const hasUnassignedAnyCup = cups.slice(0, cupCount).some(cup => Object.values(cup.taps).some(value => value === 0));
+  // All attributes unassigned (empty) in active cup
+  const hasUnassigned = Object.values(activeCup.taps).every(value => value === 0);
+  // At least one cup is completely empty (can't save if all cups are empty)
+  const allCupsEmpty = cups.slice(0, cupCount).every(cup => Object.values(cup.taps).every(value => value === 0));
 
   const totalScore = hasUnassigned ? null : calculateTotalScore(mappedScores);
 
@@ -280,17 +317,19 @@ export default function TastePadPage() {
 
   const handleSave = () => {
     const workingCups = cups.slice(0, cupCount);
-    const firstIncompleteCup = workingCups.findIndex(cup => Object.values(cup.taps).some(v => v === 0));
-    if (firstIncompleteCup !== -1) {
-      toast.error(`Cup ${firstIncompleteCup + 1}: assign all attributes first.`);
-      setActiveCupIndex(firstIncompleteCup);
+    // Require at least ONE attribute assigned per cup (not all zeros)
+    const firstEmptyCup = workingCups.findIndex(cup => Object.values(cup.taps).every(v => v === 0));
+    if (firstEmptyCup !== -1) {
+      toast.error(`Cup ${firstEmptyCup + 1}: assign at least one attribute.`);
+      setActiveCupIndex(firstEmptyCup);
       return;
     }
 
     const now = new Date().toISOString();
     const nextIndex = entries.length + 1;
 
-    const builtEntries: CoffeeEntry[] = workingCups.map((cup, idx) => {
+    // Build all cup data for the padCups field
+    const padCupsData = workingCups.map((cup, idx) => {
       const cupScores: TastingScores = {
         fragrance: TAP_TO_SCORE[cup.taps.fragrance],
         aroma: TAP_TO_SCORE[cup.taps.aroma],
@@ -302,66 +341,99 @@ export default function TastePadPage() {
         overall: TAP_TO_SCORE[cup.taps.overall],
       };
       const cupTotal = calculateTotalScore(cupScores);
-      const cupName = cup.sampleName.trim() || `Cup ${idx + 1}`;
 
       return {
-        id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
-        sampleIndex: cup.sampleCode.trim() || `S-${String(nextIndex + idx).padStart(2, '0')}`,
-        entryMode: 'pad',
-        isBlindMode: blindMode,
-        name: cupName,
-        origin: blindMode ? '' : origin.trim(),
-        process: blindMode ? PROCESS_OPTIONS[0] : process,
-        altitude: blindMode ? ALTITUDE_OPTIONS[2] : altitude,
-        roastLevel: blindMode ? ROAST_OPTIONS[2] : roastLevel,
-        roaster: blindMode ? '' : roaster.trim(),
-        brewMethod: '',
-        brewDose: '',
-        brewRatio: '',
-        brewWaterIn: '',
-        brewYield: '',
-        brewTemp: '',
-        brewTime: '',
-        brewTDS: '',
-        brewWater: '',
-        brewGrinder: '',
-        brewGrindLevel: '',
-        brewGrindClicks: '',
-        brewGrindMicrons: '',
-        brewGrindSize: '',
-        brewPours: [],
-        brewRecipeNotes: '',
-        tastingLiquidMl: '',
-        tastingDose: '',
-        notes: [
-          blindMode ? '[TastePad][Blind Mode]' : '[TastePad]',
-          `[Cup ${idx + 1}/${cupCount}]`,
-          `Acidity↔Sweetness: ${cupScores.acidity}/${cupScores.sweetness}`,
-          `Mouthfeel↕Aftertaste: ${cupScores.mouthfeel}/${cupScores.aftertaste}`,
-          `Fragrance/Aroma: ${cupScores.fragrance}/${cupScores.aroma}`,
-          `Intensity/Clarity: ${cupScores.flavor}/${cupScores.overall}`,
-          cup.notes.trim(),
-        ].filter(Boolean).join('\n'),
+        index: idx + 1,
+        sampleName: cup.sampleName.trim() || `Cup ${idx + 1}`,
+        sampleCode: cup.sampleCode.trim() || `S-${String(nextIndex + idx).padStart(2, '0')}`,
+        notes: cup.notes.trim(),
         scores: cupScores,
         totalScore: cupTotal,
-        isFavorite: false,
-        focusedAttributes: Array.from(cup.focusedAttributes),
-        aromaDescriptors: [],
-        sweetnessDescriptors: [],
-        sweetnessDetailDescriptors: [],
-        acidityDescriptors: [],
-        acidityTypeDescriptors: [],
-        intensityDescriptors: [],
-        mouthfeelDescriptors: [],
-        aftertasteDescriptors: [],
-        overallDescriptors: [],
-        createdAt: now,
-        updatedAt: now,
       };
     });
 
-    builtEntries.forEach(addEntry);
-    toast.success(`Taste Pad saved ${builtEntries.length} cup${builtEntries.length > 1 ? 's' : ''} to log!`);
+    // First cup's scores for the main entry
+    const firstCupScores = {
+      fragrance: TAP_TO_SCORE[workingCups[0].taps.fragrance],
+      aroma: TAP_TO_SCORE[workingCups[0].taps.aroma],
+      acidity: TAP_TO_SCORE[workingCups[0].taps.acidity],
+      sweetness: TAP_TO_SCORE[workingCups[0].taps.sweetness],
+      mouthfeel: TAP_TO_SCORE[workingCups[0].taps.mouthfeel],
+      aftertaste: TAP_TO_SCORE[workingCups[0].taps.aftertaste],
+      flavor: TAP_TO_SCORE[workingCups[0].taps.flavor],
+      overall: TAP_TO_SCORE[workingCups[0].taps.overall],
+    };
+    const firstCupTotal = calculateTotalScore(firstCupScores);
+    const firstName = workingCups[0].sampleName.trim() || 'Cup 1';
+
+    // Single entry containing all cups
+    const entry: CoffeeEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      sampleIndex: workingCups[0].sampleCode.trim() || `S-${String(nextIndex).padStart(2, '0')}`,
+      entryMode: 'pad',
+      isBlindMode: blindMode,
+      name: cupCount > 1 ? `${firstName} + ${cupCount - 1} more` : firstName,
+      origin: blindMode ? '' : origin.trim(),
+      process: blindMode ? PROCESS_OPTIONS[0] : process,
+      altitude: blindMode ? ALTITUDE_OPTIONS[2] : altitude,
+      roastLevel: blindMode ? ROAST_OPTIONS[2] : roastLevel,
+      roaster: blindMode ? '' : roaster.trim(),
+      brewMethod: '',
+      brewDose: '',
+      brewRatio: '',
+      brewWaterIn: '',
+      brewYield: '',
+      brewTemp: '',
+      brewTime: '',
+      brewTDS: '',
+      brewWater: '',
+      brewGrinder: '',
+      brewGrindLevel: '',
+      brewGrindClicks: '',
+      brewGrindMicrons: '',
+      brewGrindSize: '',
+      brewPours: [],
+      brewRecipeNotes: '',
+      tastingLiquidMl: '',
+      tastingDose: '',
+      notes: [
+        blindMode ? '[TastePad][Blind Mode]' : '[TastePad]',
+        `[${cupCount} Cup${cupCount > 1 ? 's' : ''} Blind Test]`,
+        workingCups[0].notes.trim(),
+      ].filter(Boolean).join('\n'),
+      scores: firstCupScores,
+      totalScore: firstCupTotal,
+      isFavorite: false,
+      focusedAttributes: Array.from(workingCups[0].focusedAttributes),
+      aromaDescriptors: [],
+      sweetnessDescriptors: [],
+      sweetnessDetailDescriptors: [],
+      acidityDescriptors: [],
+      acidityTypeDescriptors: [],
+      intensityDescriptors: [],
+      mouthfeelDescriptors: [],
+      aftertasteDescriptors: [],
+      overallDescriptors: [],
+      padCups: padCupsData,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (isEditingExisting && draft.id) {
+      // Update existing entry
+      updateEntry(draft.id, {
+        ...entry,
+        id: draft.id,
+        createdAt: draft.createdAt,
+        isFavorite: draft.isFavorite,
+      });
+      resetDraft();
+      toast.success(`Taste Pad updated with ${cupCount} cup${cupCount > 1 ? 's' : ''}!`);
+    } else {
+      // Create new entry
+      addEntry(entry);
+      toast.success(`Taste Pad saved ${cupCount} cup${cupCount > 1 ? 's' : ''} to log!`);
+    }
 
     setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
     setActiveCupIndex(0);
@@ -694,10 +766,10 @@ export default function TastePadPage() {
             onClick={handleSave}
             className="flex-1 gap-1.5 font-semibold"
             style={{ background: 'oklch(0.38 0.08 35)', color: 'white' }}
-            disabled={hasUnassignedAnyCup}
+            disabled={allCupsEmpty}
           >
             <Save size={14} />
-            {hasUnassignedAnyCup ? 'Assign All Cups First' : `Save ${cupCount} Cup${cupCount > 1 ? 's' : ''} to Log`}
+            {allCupsEmpty ? 'Assign At Least One Cup' : `Save ${cupCount} Cup${cupCount > 1 ? 's' : ''} to Log`}
           </Button>
         </div>
       </div>

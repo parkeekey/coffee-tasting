@@ -196,6 +196,105 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry, ta
         </div>
       )}
 
+      {/* Multi-cup Taste Pad display */}
+      {entry.padCups && entry.padCups.length > 1 && (
+        <div style={{ padding: '10px 20px 8px', background: '#fafaf8', borderTop: '1px solid #e8e0d4' }}>
+          <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>
+            {entry.padCups.length} Cup Blind Test
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: entry.padCups.length === 2 ? '1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
+            {entry.padCups.map((cup) => {
+              const cupColor = getScoreHex(cup.totalScore);
+              const center = 45;
+              const radius = 30;
+              
+              const ratioFr = Math.max(0, Math.min(1, cup.scores.fragrance / 9));
+              const ratioAr = Math.max(0, Math.min(1, cup.scores.aroma / 9));
+              const ratioIn = Math.max(0, Math.min(1, cup.scores.flavor / 9));
+              const ratioCl = Math.max(0, Math.min(1, cup.scores.overall / 9));
+              
+              const pFr = { x: center, y: center - radius * ratioFr };
+              const pAr = { x: center + radius * ratioAr, y: center };
+              const pIn = { x: center, y: center + radius * ratioIn };
+              const pCl = { x: center - radius * ratioCl, y: center };
+              
+              const polygon = `${pFr.x},${pFr.y} ${pAr.x},${pAr.y} ${pIn.x},${pIn.y} ${pCl.x},${pCl.y}`;
+              
+              const getScoreLabel = (score: number) => {
+                if (score === 0) return 'None';
+                if (score === 3) return 'Low';
+                if (score === 6) return 'Med';
+                if (score === 9) return 'High';
+                return score.toString();
+              };
+
+              return (
+                <div key={cup.index} style={{ background: '#fff', border: '1px solid #ebe5da', borderRadius: 8, padding: '8px' }}>
+                  <div style={{ textAlign: 'center' as const, marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: cupColor }}>Cup {cup.index}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: cupColor }}>{cup.totalScore.toFixed(1)}</div>
+                  </div>
+                  
+                  <svg viewBox="0 0 90 90" style={{ width: '100%', height: 'auto', marginBottom: 6, display: 'block' }}>
+                    {/* Grid circles */}
+                    <circle cx={center} cy={center} r={radius} fill="none" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="1,1" opacity="0.5" />
+                    <circle cx={center} cy={center} r={radius * 0.5} fill="none" stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="1,1" opacity="0.3" />
+                    
+                    {/* Axes */}
+                    <line x1={center} y1={center - radius - 3} x2={center} y2={center + radius + 3} stroke="#d1d5db" strokeWidth="0.5" />
+                    <line x1={center - radius - 3} y1={center} x2={center + radius + 3} y2={center} stroke="#d1d5db" strokeWidth="0.5" />
+                    
+                    {/* Polygon */}
+                    <polygon points={polygon} fill={cupColor} fillOpacity="0.25" stroke={cupColor} strokeWidth="1.5" />
+                    
+                    {/* Data points */}
+                    <circle cx={pFr.x} cy={pFr.y} r="1.5" fill={cupColor} />
+                    <circle cx={pAr.x} cy={pAr.y} r="1.5" fill={cupColor} />
+                    <circle cx={pIn.x} cy={pIn.y} r="1.5" fill={cupColor} />
+                    <circle cx={pCl.x} cy={pCl.y} r="1.5" fill={cupColor} />
+                    
+                    {/* Center dot */}
+                    <circle cx={center} cy={center} r="1" fill="#6b7280" />
+                    
+                    {/* Labels */}
+                    <text x={center} y={center - radius - 4} fontSize="6" textAnchor="middle" fill="#6b7280" fontWeight="600">🌸</text>
+                    <text x={center + radius + 4} y={center + 2} fontSize="6" textAnchor="start" fill="#6b7280" fontWeight="600">👃</text>
+                    <text x={center} y={center + radius + 7} fontSize="6" textAnchor="middle" fill="#6b7280" fontWeight="600">👅</text>
+                    <text x={center - radius - 4} y={center + 2} fontSize="6" textAnchor="end" fill="#6b7280" fontWeight="600">🌟</text>
+                  </svg>
+                  
+                  {/* Attribute values */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 2, textAlign: 'center' as const, marginBottom: 4 }}>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1f2937' }}>{cup.scores.fragrance}</div>
+                      <div style={{ fontSize: 8, color: '#9ca3af' }}>{getScoreLabel(cup.scores.fragrance)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1f2937' }}>{cup.scores.aroma}</div>
+                      <div style={{ fontSize: 8, color: '#9ca3af' }}>{getScoreLabel(cup.scores.aroma)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1f2937' }}>{cup.scores.flavor}</div>
+                      <div style={{ fontSize: 8, color: '#9ca3af' }}>{getScoreLabel(cup.scores.flavor)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1f2937' }}>{cup.scores.overall}</div>
+                      <div style={{ fontSize: 8, color: '#9ca3af' }}>{getScoreLabel(cup.scores.overall)}</div>
+                    </div>
+                  </div>
+                  
+                  {cup.sampleName && (
+                    <div style={{ fontSize: 8, color: '#9ca3af', textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                      {cup.sampleName}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Sensory + descriptor tags */}
       {tagDetailMode === 'full' && compactGroups.length > 0 && (
         <div style={{ padding: '10px 20px 4px', background: '#fffdf9' }}>
