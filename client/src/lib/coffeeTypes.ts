@@ -718,6 +718,41 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
   };
 }
 
+export function createTasteEntryFromPadCup({
+  cup,
+  sampleIndex,
+  source,
+  focusedAttributes = [],
+}: {
+  cup: Pick<PadCupData, 'index' | 'sampleName' | 'sampleCode' | 'notes' | 'scores'>;
+  sampleIndex: number;
+  source?: Partial<Pick<CoffeeEntry, 'origin' | 'process' | 'altitude' | 'roastLevel' | 'roaster' | 'isBlindMode'>>;
+  focusedAttributes?: (keyof TastingScores)[];
+}): CoffeeEntry {
+  const base = createEmptyEntry(sampleIndex);
+  const scores: TastingScores = {
+    ...base.scores,
+    ...cup.scores,
+  };
+
+  return {
+    ...base,
+    entryMode: 'tasting',
+    isBlindMode: false,
+    sampleIndex: cup.sampleCode.trim() || base.sampleIndex,
+    name: cup.sampleName.trim() || cup.sampleCode.trim() || `Cup ${cup.index}`,
+    origin: source?.origin ?? base.origin,
+    process: source?.process ?? base.process,
+    altitude: source?.altitude ?? base.altitude,
+    roastLevel: source?.roastLevel ?? base.roastLevel,
+    roaster: source?.roaster ?? base.roaster,
+    notes: cup.notes.trim(),
+    scores,
+    totalScore: calculateTotalScore(scores),
+    focusedAttributes: [...focusedAttributes],
+  };
+}
+
 /** Export entries to CSV string */
 export function exportToCSV(entries: CoffeeEntry[]): string {
   const headers = [

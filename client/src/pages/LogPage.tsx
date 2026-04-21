@@ -3,7 +3,7 @@
 // Design: "Specialty Lab" — warm scientific minimalism
 // =============================================================
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,13 +20,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, createTasteEntryFromPadCup, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
-  const { toggleFavorite, deleteEntry, editEntry, setActiveTab } = useCoffee();
+  const { entries, toggleFavorite, deleteEntry, editEntry, resetDraft, setActiveTab, setDraft } = useCoffee();
   const [expanded, setExpanded] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [padViewMode, setPadViewMode] = useState<'detail' | 'grid-2x2' | 'grid-3x3'>('detail');
+  const [selectedPadCupIndex, setSelectedPadCupIndex] = useState(0);
+  const [focusedPadCupIndexes, setFocusedPadCupIndexes] = useState<Set<number>>(new Set([0]));
+  const [showPadCupImportPanel, setShowPadCupImportPanel] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
   const color = getScoreHex(entry.totalScore);
   const mode = entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
@@ -104,6 +107,11 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
     });
   }, [normalizedPadCups]);
 
+  useEffect(() => {
+    setFocusedPadCupIndexes(prev => new Set(Array.from(prev).filter(idx => idx >= 0 && idx < normalizedPadCups.length)));
+    setSelectedPadCupIndex(prev => (prev >= 0 && prev < normalizedPadCups.length ? prev : -1));
+  }, [normalizedPadCups.length]);
+
   const handleEdit = () => {
     editEntry(entry.id);
     
@@ -160,6 +168,53 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
     } finally {
       setSharing(false);
     }
+  };
+
+  const selectedPadCup = selectedPadCupIndex === -1 ? null : (normalizedPadCups[selectedPadCupIndex] ?? normalizedPadCups[0]);
+
+  const togglePadCupFocus = (idx: number) => {
+    setFocusedPadCupIndexes(prev => {
+      const next = new Set(prev);
+      const wasFocused = next.has(idx);
+
+      if (wasFocused) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+
+      setSelectedPadCupIndex(current => {
+        if (!wasFocused) return idx;
+        if (current !== idx) return current;
+
+        const remaining = Array.from(next).sort((a, b) => a - b);
+        return remaining.length > 0 ? remaining[remaining.length - 1] : -1;
+      });
+
+      return next;
+    });
+  };
+
+  const handleImportPadCupToTaste = () => {
+    if (!selectedPadCup) return;
+
+    const importedDraft = createTasteEntryFromPadCup({
+      cup: selectedPadCup,
+      sampleIndex: entries.length + 1,
+      source: {
+        origin: entry.origin,
+        process: entry.process,
+        altitude: entry.altitude,
+        roastLevel: entry.roastLevel,
+        roaster: entry.roaster,
+        isBlindMode: isBlindModeEntry,
+      },
+    });
+
+    resetDraft();
+    setDraft(importedDraft);
+    setActiveTab('taste');
+    toast.success(`Imported Cup ${selectedPadCup.index} to Taste mode.`);
   };
 
   return (
@@ -300,6 +355,54 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                   </button>
                 </div>
               </div>
+              <div className="mb-3 rounded-lg border border-cyan-200 bg-white px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-cyan-700">Selected Cup Import</p>
+                    <p className="text-xs font-semibold text-cyan-900 truncate">Cup {selectedPadCup?.index ?? 1} · {selectedPadCup?.sampleName || selectedPadCup?.sampleCode || 'Tap a cup to focus'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPadCupImportPanel(prev => !prev)}
+                    className="inline-flex items-center gap-1 rounded-md border border-cyan-200 bg-white px-2 py-1 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50"
+                  >
+                    {showPadCupImportPanel ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    {showPadCupImportPanel ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {showPadCupImportPanel && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {normalizedPadCups.map((cup, idx) => (
+                        <button
+                          key={cup.index}
+                          type="button"
+                          onClick={() => togglePadCupFocus(idx)}
+                          className={`rounded-md border px-2 py-1 text-left transition-colors ${
+                            focusedPadCupIndexes.has(idx)
+                              ? 'border-cyan-500 bg-cyan-100 text-cyan-900'
+                              : 'border-cyan-100 bg-white text-cyan-700 hover:bg-cyan-50'
+                          }`}
+                        >
+                          <div className="text-[10px] font-semibold">Cup {cup.index}</div>
+                          <div className="max-w-[88px] truncate text-[10px] opacity-80">{cup.sampleName || cup.sampleCode || 'Tap to focus'}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleImportPadCupToTaste}
+                      disabled={!selectedPadCup}
+                      className="h-8 gap-1.5 whitespace-nowrap border-cyan-200 text-cyan-800 hover:bg-cyan-50"
+                    >
+                      <Upload size={13} />
+                      Import Selected Cup
+                    </Button>
+                  </div>
+                )}
+              </div>
               
               {/* Taste Pad map grid */}
               <div className={`grid gap-2 mb-3 ${
@@ -307,7 +410,7 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                 padViewMode === 'grid-3x3' ? 'grid-cols-3' :
                 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
               }`}>
-                {normalizedPadCups.map((cup) => {
+                {normalizedPadCups.map((cup, idx) => {
                   const cupColor = getScoreHex(cup.totalScore);
                   const center = 70;
                   const radius = 56;
@@ -342,7 +445,15 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                   const clarity = cup.scores.overall;
 
                   return (
-                    <div key={cup.index} className={`bg-white rounded-lg border border-cyan-100 ${padViewMode === 'detail' ? 'p-2' : 'p-1.5'}`}>
+                    <div
+                      key={cup.index}
+                      onClick={() => togglePadCupFocus(idx)}
+                      className={`bg-white rounded-lg border cursor-pointer transition-colors ${
+                        focusedPadCupIndexes.has(idx)
+                          ? 'border-cyan-400 ring-1 ring-cyan-200'
+                          : 'border-cyan-100 hover:border-cyan-200'
+                      } ${padViewMode === 'detail' ? 'p-2' : 'p-1.5'}`}
+                    >
                       <div className={`text-center ${padViewMode === 'detail' ? 'mb-2' : 'mb-1'}`}>
                         <div className={`font-semibold text-cyan-700 ${padViewMode === 'detail' ? 'text-xs' : 'text-[9px]'}`}>Cup {cup.index}</div>
                         {cup.sampleName && (

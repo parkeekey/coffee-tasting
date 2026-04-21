@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Plus, Minus, RotateCcw, Save, EyeOff, Eye, Crosshair } from 'lucide-react';
+import { Plus, Minus, RotateCcw, Save, EyeOff, Eye, Crosshair, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import {
   ALTITUDE_OPTIONS,
   calculateTotalScore,
   CoffeeEntry,
+  createTasteEntryFromPadCup,
   PROCESS_OPTIONS,
   ROAST_OPTIONS,
   TastingScores,
@@ -133,12 +134,14 @@ function GestureButton({
 }
 
 export default function TastePadPage() {
-  const { entries, addEntry, setActiveTab, draft, isEditingExisting, resetDraft, updateEntry } = useCoffee();
+  const { entries, addEntry, setActiveTab, draft, isEditingExisting, resetDraft, setDraft, updateEntry } = useCoffee();
 
   const [blindMode, setBlindMode] = useState(true);
   const [cupCount, setCupCount] = useState(1);
   const [activeCupIndex, setActiveCupIndex] = useState(0);
+  const [focusedCupIndexes, setFocusedCupIndexes] = useState<Set<number>>(new Set([0]));
   const [cups, setCups] = useState<PadCupState[]>([createInitialCupState()]);
+  const [showFocusedCupPanel, setShowFocusedCupPanel] = useState(true);
 
   const [origin, setOrigin] = useState('');
   const [process, setProcess] = useState(PROCESS_OPTIONS[0]);
@@ -177,6 +180,7 @@ export default function TastePadPage() {
 
       setCups(reconstructedCups);
       setActiveCupIndex(0);
+      setFocusedCupIndexes(new Set([0]));
     }
   }, [isEditingExisting, draft]);
 
@@ -194,7 +198,21 @@ export default function TastePadPage() {
       if (prev.length > clamped) return prev.slice(0, clamped);
       return [...prev, ...Array.from({ length: clamped - prev.length }, () => createInitialCupState())];
     });
+    setFocusedCupIndexes(prev => new Set(Array.from(prev).filter(idx => idx >= 0 && idx < clamped)));
     setActiveCupIndex(prev => Math.min(prev, clamped - 1));
+  };
+
+  const toggleFocusedCup = (index: number) => {
+    setFocusedCupIndexes(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+    setActiveCupIndex(index);
   };
 
   const cycleActiveCup = () => {
@@ -305,6 +323,7 @@ export default function TastePadPage() {
   const resetAll = () => {
     setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
     setActiveCupIndex(0);
+    setFocusedCupIndexes(new Set([0]));
     if (!blindMode) {
       setOrigin('');
       setProcess(PROCESS_OPTIONS[0]);
@@ -394,6 +413,10 @@ export default function TastePadPage() {
       brewGrindSize: '',
       brewPours: [],
       brewRecipeNotes: '',
+      brewAdjRatio: '',
+      brewAdjGrindsize: '',
+      brewAdjTemp: '',
+      brewAdjTurbulance: '',
       tastingLiquidMl: '',
       tastingDose: '',
       notes: [
@@ -402,6 +425,26 @@ export default function TastePadPage() {
         workingCups[0].notes.trim(),
       ].filter(Boolean).join('\n'),
       scores: firstCupScores,
+      sensoryNotes: {
+        fragrance: '',
+        aroma: '',
+        acidity: '',
+        sweetness: '',
+        flavor: '',
+        mouthfeel: '',
+        aftertaste: '',
+        overall: '',
+      },
+      sensoryReactions: {
+        fragrance: '',
+        aroma: '',
+        acidity: '',
+        sweetness: '',
+        flavor: '',
+        mouthfeel: '',
+        aftertaste: '',
+        overall: '',
+      },
       totalScore: firstCupTotal,
       isFavorite: false,
       focusedAttributes: Array.from(workingCups[0].focusedAttributes),
@@ -437,7 +480,40 @@ export default function TastePadPage() {
 
     setCups(Array.from({ length: cupCount }, () => createInitialCupState()));
     setActiveCupIndex(0);
+    setFocusedCupIndexes(new Set([0]));
     setActiveTab('log');
+  };
+
+  const handleImportActiveCupToTaste = () => {
+    if (hasUnassigned) {
+      toast.error('Assign at least one score before importing this cup.');
+      return;
+    }
+
+    const importedDraft = createTasteEntryFromPadCup({
+      cup: {
+        index: activeCupIndex + 1,
+        sampleName: activeCup.sampleName,
+        sampleCode: activeCup.sampleCode,
+        notes: activeCup.notes,
+        scores: mappedScores,
+      },
+      sampleIndex: entries.length + 1,
+      source: {
+        origin,
+        process,
+        altitude,
+        roastLevel,
+        roaster,
+        isBlindMode: blindMode,
+      },
+      focusedAttributes: Array.from(activeCup.focusedAttributes),
+    });
+
+    resetDraft();
+    setDraft(importedDraft);
+    setActiveTab('taste');
+    toast.success(`Imported Cup ${activeCupIndex + 1} to Taste mode.`);
   };
 
   return (
@@ -469,26 +545,62 @@ export default function TastePadPage() {
               </Select>
             </div>
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+          <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
             {Array.from({ length: cupCount }, (_, i) => {
               const cup = cups[i] ?? createInitialCupState();
               const done = !Object.values(cup.taps).some(v => v === 0);
               return (
                 <button
                   key={i}
-                  onClick={() => setActiveCupIndex(i)}
-                  className={`h-7 px-2.5 rounded-full border text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                    i === activeCupIndex
-                      ? 'bg-primary text-primary-foreground border-primary'
+                  onClick={() => toggleFocusedCup(i)}
+                  className={`min-w-[92px] rounded-lg border px-2 py-1.5 text-left whitespace-nowrap transition-colors ${
+                    focusedCupIndexes.has(i)
+                      ? 'bg-primary/10 text-primary border-primary shadow-sm'
                       : done
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : 'bg-white text-muted-foreground border-border hover:bg-muted/40'
                   }`}
                 >
-                  Cup {i + 1}
+                  <div className="text-[11px] font-semibold">Cup {i + 1}</div>
+                  <div className="text-[10px] truncate opacity-80">{cup.sampleName.trim() || cup.sampleCode.trim() || 'Tap to focus'}</div>
                 </button>
               );
             })}
+          </div>
+          <div className="mt-2 rounded-lg bg-muted/30 px-2.5 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Focused Cups</p>
+                <p className="text-xs font-semibold text-foreground truncate">
+                  {focusedCupIndexes.size > 0
+                    ? `Cup ${Array.from(focusedCupIndexes).sort((a, b) => a - b).map(idx => idx + 1).join(', ')}`
+                    : 'No cups focused'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFocusedCupPanel(prev => !prev)}
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-white px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:bg-muted/50"
+              >
+                {showFocusedCupPanel ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {showFocusedCupPanel ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showFocusedCupPanel && (
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleImportActiveCupToTaste}
+                  disabled={hasUnassigned}
+                  className="h-8 gap-1.5 whitespace-nowrap"
+                >
+                  <Upload size={13} />
+                  Import To Taste
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
