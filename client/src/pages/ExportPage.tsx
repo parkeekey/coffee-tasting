@@ -70,7 +70,8 @@ function downloadFile(content: string, filename: string, mime: string) {
 }
 
 export default function ExportPage() {
-  const { entries } = useCoffee();
+  const { entries, showPadScore100, setShowPadScore100 } = useCoffee();
+  const [pageMode, setPageMode] = useState<'export' | 'settings'>('export');
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv');
   const [pngTagDetailMode, setPngTagDetailMode] = useState<'compact' | 'full'>('full');
   const [copied, setCopied] = useState(false);
@@ -276,8 +277,56 @@ export default function ExportPage() {
           <p className="text-sm text-white/60 mt-0.5">
             {entries.length} {entries.length === 1 ? 'entry' : 'entries'} ready to export
           </p>
+          <div className="mt-3 inline-flex items-center rounded-lg border border-white/20 bg-white/10 p-0.5">
+            <button
+              type="button"
+              onClick={() => setPageMode('export')}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                pageMode === 'export' ? 'bg-white text-foreground' : 'text-white/80 hover:text-white'
+              }`}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => setPageMode('settings')}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                pageMode === 'settings' ? 'bg-white text-foreground' : 'text-white/80 hover:text-white'
+              }`}
+            >
+              Settings
+            </button>
+          </div>
         </div>
       </div>
+
+      {pageMode === 'settings' && (
+        <div className="bg-white border-b border-border px-4 py-4">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Display Settings
+          </h2>
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">Show Pad score /100</p>
+                <p className="text-xs text-muted-foreground">Controls whether pad tasting shows the total score out of 100.</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant={showPadScore100 ? 'default' : 'outline'}
+                onClick={() => setShowPadScore100(!showPadScore100)}
+                className="h-8 min-w-20"
+              >
+                {showPadScore100 ? 'ON' : 'OFF'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pageMode === 'export' && (
+      <>
 
       {/* Summary stats */}
       {entries.length > 0 && (
@@ -535,6 +584,8 @@ export default function ExportPage() {
         </Button>
       </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

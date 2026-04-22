@@ -51,15 +51,28 @@ interface CoffeeContextValue {
   // UI state
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
+  showPadScore100: boolean;
+  setShowPadScore100: (show: boolean) => void;
 }
 
 const CoffeeContext = createContext<CoffeeContextValue | null>(null);
+const UI_SETTINGS_KEY = 'coffee-tasting-ui-settings';
 
 export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<CoffeeEntry[]>(() => loadEntries());
   const [draft, setDraft] = useState<CoffeeEntry>(() => createEmptyEntry(1));
   const [isEditingExisting, setIsEditingExisting] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('taste');
+  const [showPadScore100, setShowPadScore100] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(UI_SETTINGS_KEY);
+      if (!raw) return true;
+      const parsed = JSON.parse(raw) as { showPadScore100?: unknown };
+      return typeof parsed.showPadScore100 === 'boolean' ? parsed.showPadScore100 : true;
+    } catch {
+      return true;
+    }
+  });
 
   const normalizeImportedEntry = useCallback((entry: Partial<CoffeeEntry>, fallbackIndex: number): CoffeeEntry | null => {
     const scores = entry.scores as Partial<TastingScores> | undefined;
@@ -111,6 +124,10 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     saveEntries(entries);
   }, [entries]);
+
+  useEffect(() => {
+    localStorage.setItem(UI_SETTINGS_KEY, JSON.stringify({ showPadScore100 }));
+  }, [showPadScore100]);
 
   const addEntry = useCallback((entry: CoffeeEntry) => {
     setEntries(prev => [entry, ...prev]);
@@ -297,6 +314,7 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
       toggleFocusedAttribute,
       saveDraft, resetDraft, editEntry, isEditingExisting,
       activeTab, setActiveTab,
+      showPadScore100, setShowPadScore100,
     }}>
       {children}
     </CoffeeContext.Provider>

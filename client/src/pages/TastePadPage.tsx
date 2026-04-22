@@ -134,7 +134,7 @@ function GestureButton({
 }
 
 export default function TastePadPage() {
-  const { entries, addEntry, setActiveTab, draft, isEditingExisting, resetDraft, setDraft, updateEntry } = useCoffee();
+  const { entries, addEntry, setActiveTab, draft, isEditingExisting, resetDraft, setDraft, updateEntry, showPadScore100 } = useCoffee();
 
   const [blindMode, setBlindMode] = useState(true);
   const [cupCount, setCupCount] = useState(1);
@@ -524,10 +524,12 @@ export default function TastePadPage() {
             <h1 className="font-display text-xl font-bold text-foreground">Taste Pad</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Tap-based quick sensory mapping</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Cup {activeCupIndex + 1} total</p>
-            <p className="font-mono-custom font-bold text-base text-primary">{totalScore === null ? '— / 100' : `${totalScore.toFixed(1)}/100`}</p>
-          </div>
+          {showPadScore100 && (
+            <div className="text-right">
+              <p className="text-[10px] text-muted-foreground">Cup {activeCupIndex + 1} total</p>
+              <p className="font-mono-custom font-bold text-base text-primary">{totalScore === null ? '— / 100' : `${totalScore.toFixed(1)}/100`}</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-2 rounded-lg border border-border p-2.5">

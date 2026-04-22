@@ -23,9 +23,10 @@ import { useCoffee } from '@/contexts/CoffeeContext';
 import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, createTasteEntryFromPadCup, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
-  const { entries, toggleFavorite, deleteEntry, editEntry, resetDraft, setActiveTab, setDraft } = useCoffee();
+  const { entries, toggleFavorite, deleteEntry, editEntry, resetDraft, setActiveTab, setDraft, showPadScore100 } = useCoffee();
   const [expanded, setExpanded] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [showSingleRadar, setShowSingleRadar] = useState(true);
   const [padViewMode, setPadViewMode] = useState<'detail' | 'grid-2x2' | 'grid-3x3'>('detail');
   const [selectedPadCupIndex, setSelectedPadCupIndex] = useState(0);
   const [focusedPadCupIndexes, setFocusedPadCupIndexes] = useState<Set<number>>(new Set([0]));
@@ -217,24 +218,67 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
     toast.success(`Imported Cup ${selectedPadCup.index} to Taste mode.`);
   };
 
+  const singleEntryRadar = useMemo(() => {
+    const center = 90;
+    const radius = 62;
+    const count = SCORE_ATTRIBUTES.length;
+
+    const points = SCORE_ATTRIBUTES.map((attr, idx) => {
+      const value = Math.max(0, Math.min(9, Number(entry.scores[attr.key] ?? 0)));
+      const ratio = value / 9;
+      const angle = (-Math.PI / 2) + ((Math.PI * 2 * idx) / count);
+      const axisX = center + Math.cos(angle) * radius;
+      const axisY = center + Math.sin(angle) * radius;
+
+      return {
+        ...attr,
+        value,
+        x: center + Math.cos(angle) * radius * ratio,
+        y: center + Math.sin(angle) * radius * ratio,
+        axisX,
+        axisY,
+        labelX: center + Math.cos(angle) * (radius + 14),
+        labelY: center + Math.sin(angle) * (radius + 14),
+      };
+    });
+
+    const polygon = points.map((p) => `${p.x},${p.y}`).join(' ');
+    const grid = [0.2, 0.4, 0.6, 0.8, 1].map((level) =>
+      points.map((p) => `${center + (p.axisX - center) * level},${center + (p.axisY - center) * level}`).join(' ')
+    );
+
+    return { center, polygon, points, grid };
+  }, [
+    entry.scores.acidity,
+    entry.scores.aftertaste,
+    entry.scores.aroma,
+    entry.scores.flavor,
+    entry.scores.fragrance,
+    entry.scores.mouthfeel,
+    entry.scores.overall,
+    entry.scores.sweetness,
+  ]);
+
   return (
     <div ref={cardRef} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-slide-up">
 
       {/* Card header */}
       <div className="flex items-start p-3 gap-3">
         {/* Score badge */}
-        <div
-          className="flex-none w-14 h-14 rounded-xl flex flex-col items-center justify-center"
-          style={{ backgroundColor: `${color}15`, border: `1.5px solid ${color}30` }}
-        >
-          <span
-            className="font-mono-custom font-bold text-base leading-tight"
-            style={{ color }}
+        {(!isTastePadEntry || showPadScore100) && (
+          <div
+            className="flex-none w-14 h-14 rounded-xl flex flex-col items-center justify-center"
+            style={{ backgroundColor: `${color}15`, border: `1.5px solid ${color}30` }}
           >
-            {entry.totalScore.toFixed(1)}
-          </span>
-          <span className="text-[9px] text-muted-foreground">/100</span>
-        </div>
+            <span
+              className="font-mono-custom font-bold text-base leading-tight"
+              style={{ color }}
+            >
+              {entry.totalScore.toFixed(1)}
+            </span>
+            <span className="text-[9px] text-muted-foreground">/100</span>
+          </div>
+        )}
 
         {/* Info */}
         <div className="flex-1 min-w-0">
@@ -541,6 +585,149 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                     </p>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {normalizedPadCups.length === 0 && (
+            <div className="mb-3 p-3 bg-cyan-50 rounded-lg border border-cyan-200">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-cyan-900 font-semibold">🧭 Sensory Radar (Fine Scale)</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-cyan-700">All 8 attributes</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSingleRadar(prev => !prev)}
+                    className="inline-flex items-center gap-1 rounded-md border border-cyan-200 bg-white px-2 py-1 text-[10px] font-semibold text-cyan-700 hover:bg-cyan-50"
+                  >
+                    {showSingleRadar ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    {showSingleRadar ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+              {showSingleRadar && (
+              <div className="rounded-lg border border-cyan-200 bg-white p-2">
+                <svg viewBox="0 0 180 180" className="w-full h-auto" style={{ maxWidth: '170px', margin: '0 auto', display: 'block' }}>
+                  {singleEntryRadar.grid.map((poly, idx) => (
+                    <polygon
+                      key={idx}
+                      points={poly}
+                      fill="none"
+                      stroke="#e5e7eb"
+                      strokeWidth={idx === singleEntryRadar.grid.length - 1 ? 1.2 : 1}
+                    />
+                  ))}
+
+                  {singleEntryRadar.points.map((p) => (
+                    <line
+                      key={`axis-${p.key}`}
+                      x1={singleEntryRadar.center}
+                      y1={singleEntryRadar.center}
+                      x2={p.axisX}
+                      y2={p.axisY}
+                      stroke="#d1d5db"
+                      strokeWidth="1"
+                    />
+                  ))}
+
+                  <polygon points={singleEntryRadar.polygon} fill={color} fillOpacity="0.24" stroke={color} strokeWidth="2" />
+
+                  {singleEntryRadar.points.map((p) => (
+                    <circle key={`point-${p.key}`} cx={p.x} cy={p.y} r="2.6" fill={color} />
+                  ))}
+
+                  {singleEntryRadar.points.map((p) => (
+                    <text
+                      key={`label-${p.key}`}
+                      x={p.labelX}
+                      y={p.labelY}
+                      fontSize="11"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="#6b7280"
+                    >
+                      {p.emoji}
+                    </text>
+                  ))}
+                </svg>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {singleEntryRadar.points.map((p) => {
+                    const pct = Math.round((p.value / 9) * 100);
+                    return (
+                      <div key={`legend-${p.key}`} className="rounded-md border border-cyan-200 bg-cyan-50/60 px-2 py-1.5">
+                        <div className="mb-1 flex items-center justify-between gap-2 text-[10px]">
+                          <span className="font-semibold text-cyan-900">{p.emoji} {p.label}</span>
+                          <span className="font-bold text-cyan-700">{p.value}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-cyan-100">
+                          <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              )}
+            </div>
+          )}
+
+          {normalizedPadCups.length === 0 && (
+            <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2.5">
+              <p className="text-[11px] font-semibold text-emerald-900 mb-2">Sensory Breakdown</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {SCORE_ATTRIBUTES.map((attr) => {
+                  const score = Number(entry.scores[attr.key] ?? 0);
+                  const level = getAttributeLabel(score);
+                  const reaction = entry.sensoryReactions?.[attr.key] ?? '';
+                  const note = entry.sensoryNotes?.[attr.key] ?? '';
+                  const focused = entry.focusedAttributes.includes(attr.key);
+
+                  const levelStyle = level.label === 'Low'
+                    ? 'bg-rose-100 text-rose-700'
+                    : level.label === 'Med'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-emerald-100 text-emerald-700';
+
+                  const reactionBadge = reaction === 'like'
+                    ? { text: '👍 Like', style: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+                    : reaction === 'soso'
+                      ? { text: '🙂 So-so', style: 'bg-amber-100 text-amber-700 border-amber-200' }
+                      : reaction === 'dislike'
+                        ? { text: '👎 Dislike', style: 'bg-rose-100 text-rose-700 border-rose-200' }
+                        : null;
+
+                  return (
+                    <div key={attr.key} className="py-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-foreground/90">{attr.emoji} {attr.label}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${levelStyle}`}>{level.label}</span>
+                          <span className="text-sm font-bold text-foreground">{score}/9</span>
+                        </div>
+                      </div>
+
+                      {(focused || reactionBadge) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {focused && (
+                            <span className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                              <Flag size={8} className="fill-current" />
+                              Focus
+                            </span>
+                          )}
+                          {reactionBadge && (
+                            <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${reactionBadge.style}`}>
+                              {reactionBadge.text}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {note && (
+                        <p className="mt-1 text-xs italic text-muted-foreground">↳ {note}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
