@@ -31,6 +31,18 @@ export type SensoryNotes = Record<keyof TastingScores, string>;
 export type SensoryReaction = 'like' | 'soso' | 'dislike' | '';
 export type SensoryReactions = Record<keyof TastingScores, SensoryReaction>;
 
+// Hierarchical Flavor Note — SCA-inspired sensory memory model
+// Level 1: Memory/Association (single choice - what comes to mind first)
+// Level 2: Item Types (multiple choice - what items from that memory)
+// Level 3: SCA Flavor Categories (multiple choice - which flavors apply)
+export interface HierarchicalFlavorNote {
+  id: string;
+  memory: string;              // e.g. "childhood" (single)
+  detailTypes: string[];       // e.g. ["🍽️ Food", "🥤 Drink"] (multiple)
+  flavorCategories: string[];  // e.g. ["🌸 Floral", "🍏 Fruity"] (multiple)
+  specificNote?: string;       // optional free text (e.g. "grandma's kitchen")
+}
+
 export type EntryMode = 'tasting' | 'brewing' | 'pad';
 
 export interface BrewPour {
@@ -40,6 +52,7 @@ export interface BrewPour {
   timeEnd: string;     // e.g. "0:30"
   flowRate: string;    // G/s observation note
   action?: string;     // action note (e.g. swirl, stir, wait)
+  tags?: string[];     // extraction phase tags (e.g. "coffee oil", "sour acid")
 }
 
 export interface PadCupData {
@@ -103,6 +116,7 @@ export interface CoffeeEntry {
   mouthfeelDescriptors: string[];  // selected mouthfeel descriptors
   aftertasteDescriptors: string[];  // selected aftertaste length descriptors
   overallDescriptors: string[];  // selected overall profile descriptors
+  hierarchicalFlavorNotes: HierarchicalFlavorNote[];  // SCA memory-based flavor notes (Level 1→2→3)
   padCups?: PadCupData[];    // multi-cup pad mode data (stored with first cup only)
   createdAt: string;         // ISO date string
   updatedAt: string;
@@ -150,7 +164,66 @@ export const AROMA_DESCRIPTORS = [
   '🍫 Cocoa',
   '🍯 Sweet',
   '🍦 Vanilla',
+  '🍬 Brown Sugar',
+  '🌿 Spice',
+  '🔥 Roasted/Smoke',
+  '🌾 Cereal',
+  '⚫ Burnt',
+  '🚬 Tobacco',
+  '🥬 Green/Vegetable',
+  '❓ Others',
 ] as const;
+
+// Descriptor sentiment mapping (positive/negative/neutral)
+export const DESCRIPTOR_SENTIMENT: Record<string, 'positive' | 'negative' | 'neutral'> = {
+  // Aroma Descriptors
+  '🌸 Floral': 'positive',
+  '🍏 Fruity': 'positive',
+  '🍓 Berry': 'positive',
+  '🍑 Dried Fruit': 'positive',
+  '🍋 Citrus Fruit': 'positive',
+  '🍋 Sour': 'neutral',
+  '🍷 Fermented': 'negative',
+  '🥜 Nutty': 'neutral',
+  '🍫 Cocoa': 'positive',
+  '🍯 Sweet': 'positive',
+  '🍦 Vanilla': 'positive',
+
+  // Common Positive Attributes
+  'Complex': 'positive',
+  'Clean': 'positive',
+  'Bright': 'positive',
+  'Juicy': 'positive',
+  'Vibrant': 'positive',
+  'Balanced': 'positive',
+  'Well-structured': 'positive',
+  'Clear': 'positive',
+  'Distinct': 'positive',
+  'Memorable': 'positive',
+  'Round': 'positive',
+  'Silky': 'positive',
+  'Chocolatey': 'positive',
+  'Spicy': 'positive',
+
+  // Common Negative Attributes
+  'Acidic': 'negative',
+  'Bitter': 'negative',
+  'Salty': 'negative',
+  'Flat': 'negative',
+  'Dull': 'negative',
+  'Astringent': 'negative',
+  'Harsh': 'negative',
+  'Sour': 'negative',
+  'Empty': 'negative',
+  'Vegetal': 'negative',
+  'Woody': 'negative',
+  'Papery': 'negative',
+  'Stale': 'negative',
+  'Smoky': 'negative',
+  'Moldy': 'negative',
+  'Musty': 'negative',
+  'Chemical': 'negative',
+};
 
 // Acidity Descriptors — acid-type-first taxonomy with flavor tags under each type
 export const ACIDITY_DESCRIPTORS = {
@@ -209,10 +282,10 @@ export const AFTERTASTE_DESCRIPTORS = {
     Med: ['Medium Aftertaste'],
     Long: ['♾️ Persistent', '🌀 Lingering'],
   },
+  Finish: ['Clean', 'Long', 'Sweet', 'Bitter'],
 } as const;
 
 export type AftertasteType = keyof typeof AFTERTASTE_DESCRIPTORS;
-export type AftertasteSubtype<T extends AftertasteType = AftertasteType> = keyof typeof AFTERTASTE_DESCRIPTORS[T];
 
 // Overall Descriptors — optional tags for overall attribute
 export const OVERALL_DESCRIPTORS = {
@@ -245,6 +318,60 @@ export const SWEETNESS_DESCRIPTORS = {
 } as const;
 
 export type SweetnessFamily = keyof typeof SWEETNESS_DESCRIPTORS;
+
+// ========== Hierarchical Flavor Notes (SCA Memory Model) ==========
+
+// Level 1: Memory/Association Tags (customizable in settings)
+export const DEFAULT_MEMORY_TAGS = [
+  'Childhood',
+  'Favorite Moment',
+  'Food Memory',
+  'Travel',
+  'Comfort',
+  'Nostalgic',
+  'Recent Experience',
+] as const;
+
+export type MemoryTag = typeof DEFAULT_MEMORY_TAGS[number];
+
+// Level 2: Item Types (what from the memory)
+export const ITEM_TYPES = [
+  '🍽️ Food',
+  '🥤 Drink',
+  '💊 Medicine',
+  '🌿 Plant/Herb',
+  '🕯️ Scent/Aroma',
+  '🎂 Dessert',
+  '🍷 Beverage',
+  '❓ Other',
+] as const;
+
+export type ItemType = typeof ITEM_TYPES[number];
+
+// Level 3: SCA Flavor Categories (maps to flavor wheel)
+export const FLAVOR_CATEGORIES = [
+  '🌸 Floral',
+  '🍏 Fruity',
+  '🍓 Berry',
+  '🍑 Dried Fruit',
+  '🍋 Citrus Fruit',
+  '🍋 Sour',
+  '🍷 Fermented',
+  '🥜 Nutty',
+  '🍫 Cocoa',
+  '🍯 Sweet',
+  '🍦 Vanilla',
+  '🍬 Brown Sugar',
+  '🌿 Spice',
+  '🔥 Roasted/Smoke',
+  '🌾 Cereal',
+  '⚫ Burnt',
+  '🚬 Tobacco',
+  '🥬 Green/Vegetable',
+  '❓ Others',
+] as const;
+
+export type FlavorCategory = typeof FLAVOR_CATEGORIES[number];
 
 /** Calculate total score from 8 attributes (all 1s = 55, all 9s = 100) */
 export function calculateTotalScore(scores: TastingScores): number {
@@ -590,7 +717,10 @@ export function loadEntries(): CoffeeEntry[] {
       brewGrindClicks: entry.brewGrindClicks ?? '',
       brewGrindMicrons: entry.brewGrindMicrons ?? '',
       brewGrindSize: entry.brewGrindSize ?? '',
-      brewPours: entry.brewPours ?? [],
+      brewPours: (entry.brewPours ?? []).map(pour => ({
+        ...pour,
+        tags: pour.tags ?? [],
+      })),
       brewRecipeNotes: entry.brewRecipeNotes ?? '',
       brewAdjRatio: entry.brewAdjRatio ?? '',
       brewAdjGrindsize: entry.brewAdjGrindsize ?? '',
@@ -713,6 +843,7 @@ export function createEmptyEntry(sampleIndex: number): CoffeeEntry {
     mouthfeelDescriptors: [],
     aftertasteDescriptors: [],
     overallDescriptors: [],
+    hierarchicalFlavorNotes: [],
     createdAt: now,
     updatedAt: now,
   };

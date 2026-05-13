@@ -1,11 +1,11 @@
 // =============================================================
-// AftertasteDescriptorSelector — Collapsible aftertaste length selector
-// Features: Length subtype groups and clickable tags
+// AftertasteDescriptorSelector — Collapsible aftertaste selector
+// Features: Length (nested) and Finish (flat) tags
 // =============================================================
 
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { AFTERTASTE_DESCRIPTORS, AftertasteType, AftertasteSubtype } from '@/lib/coffeeTypes';
+import { AFTERTASTE_DESCRIPTORS, AftertasteType } from '@/lib/coffeeTypes';
 import { cn } from '@/lib/utils';
 
 interface AftertasteDescriptorSelectorProps {
@@ -36,6 +36,9 @@ export function AftertasteDescriptorSelector({ selected, onChange }: AftertasteD
 
   const isTypePartiallySelected = (type: AftertasteType): boolean => {
     const group = AFTERTASTE_DESCRIPTORS[type];
+    if (Array.isArray(group)) {
+      return group.some((d) => selected.includes(d));
+    }
     return Object.values(group).flat().some((d) => selected.includes(d));
   };
 
@@ -46,16 +49,61 @@ export function AftertasteDescriptorSelector({ selected, onChange }: AftertasteD
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
       >
         <ChevronDown size={14} className={cn('transition-transform', isOpen && 'rotate-180')} />
-        <span>✨ Length (Optional)</span>
+        <span>✨ Aftertaste (Optional)</span>
       </button>
 
       {isOpen && (
         <div className="space-y-2 pb-2">
           {types.map((type) => {
+            const group = AFTERTASTE_DESCRIPTORS[type];
             const isExpanded = expandedTypes.has(type);
             const isPartiallySelected = isTypePartiallySelected(type);
-            const subtypes = Object.keys(AFTERTASTE_DESCRIPTORS[type]) as AftertasteSubtype[];
 
+            // Handle flat array (Finish)
+            if (Array.isArray(group)) {
+              return (
+                <div key={type} className="space-y-1">
+                  <button
+                    onClick={() => toggleTypeExpand(type)}
+                    className={cn(
+                      'flex items-center gap-2 w-full text-left px-2 py-1 rounded transition-colors',
+                      isPartiallySelected ? 'bg-purple-100 text-purple-900' : 'hover:bg-muted'
+                    )}
+                  >
+                    <ChevronDown
+                      size={12}
+                      className={cn('transition-transform flex-none', isExpanded && 'rotate-180')}
+                    />
+                    <span className="text-xs font-medium">{type}</span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="flex flex-wrap gap-2 ml-2">
+                      {group.map((descriptor) => {
+                        const isSelected = selected.includes(descriptor);
+                        return (
+                          <button
+                            key={descriptor}
+                            onClick={() => toggleDescriptor(descriptor)}
+                            className={cn(
+                              'text-xs px-3 py-1.5 rounded-full font-medium transition-all cursor-pointer',
+                              isSelected
+                                ? 'bg-purple-500 text-white shadow-md'
+                                : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
+                            )}
+                          >
+                            {descriptor}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Handle nested object (Length)
+            const subtypes = Object.keys(group) as string[];
             return (
               <div key={type} className="space-y-1">
                 <button
@@ -75,7 +123,7 @@ export function AftertasteDescriptorSelector({ selected, onChange }: AftertasteD
                 {isExpanded && (
                   <div className="ml-3 space-y-1">
                     {subtypes.map((subtype) => {
-                      const descriptors = AFTERTASTE_DESCRIPTORS[type][subtype] as readonly string[];
+                      const descriptors = (group as Record<string, readonly string[]>)[subtype];
                       const isSubtypeSelected = descriptors.some((d) => selected.includes(d));
                       return (
                         <div key={`${type}:${subtype}`} className="space-y-1">

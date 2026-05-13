@@ -25,11 +25,12 @@ import { toast } from 'sonner';
 import { ScoreArc } from '@/components/ScoreArc';
 import { TastingSliderWithFocus } from '@/components/TastingSliderWithFocus';
 import { BrewingRecipeSection } from '@/components/BrewingRecipeSection';
+import { HierarchicalFlavorNoteSelector } from '@/components/HierarchicalFlavorNoteSelector';
 import { useCoffee } from '@/contexts/CoffeeContext';
 import { ALTITUDE_OPTIONS, calculateExtractionYieldPercent, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getQuickGuideTdsTarget, getRatioReferenceIdealWindow, PROCESS_OPTIONS, ROAST_OPTIONS, SCORE_ATTRIBUTES } from '@/lib/coffeeTypes';
 
 export default function TastePage() {
-  const { draft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, toggleFocusedAttribute, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, saveDraft, resetDraft, isEditingExisting } = useCoffee();
+  const { draft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, toggleFocusedAttribute, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, updateDraftHierarchicalFlavorNotes, saveDraft, resetDraft, isEditingExisting } = useCoffee();
   const [infoOpen, setInfoOpen] = useState(true);
   const [guideRatioInput, setGuideRatioInput] = useState('');
   const [guideEyMin, setGuideEyMin] = useState('18');
@@ -302,6 +303,11 @@ export default function TastePage() {
                 placeholder="e.g. Jasmine, bergamot, ripe peach, brown sugar..."
                 className="text-sm resize-none"
                 rows={2}
+              />
+              {/* Hierarchical Flavor Notes */}
+              <HierarchicalFlavorNoteSelector
+                notes={draft.hierarchicalFlavorNotes}
+                onChange={updateDraftHierarchicalFlavorNotes}
               />
             </div>
 

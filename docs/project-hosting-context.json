@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "name": "Project Hosting Context",
+    "version": "1.0.0",
+    "purpose": "Explain the current project structure and how to create a new static website in a new repo under the same GitHub account.",
+    "createdFrom": "coffee-tasting workspace"
+  },
+  "currentProject": {
+    "localWorkspacePath": "C:/Users/wwwpa/Downloads/coffee-tasting",
+    "projectName": "coffee-tasting",
+    "stack": {
+      "frontend": "React + TypeScript + Vite",
+      "styling": "Tailwind CSS + shadcn-style UI",
+      "packageManager": "pnpm"
+    },
+    "sourceRoot": "client",
+    "appEntry": "client/src/main.tsx",
+    "viteRoot": "client",
+    "viteBuildOutput": "dist/public",
+    "publishedFolder": "docs",
+    "deploymentModel": {
+      "host": "GitHub Pages",
+      "branch": "main",
+      "folder": "docs",
+      "meaning": "GitHub Pages is expected to publish from the docs folder inside the main branch, not from a separate branch named main/docs."
+    },
+    "basePathBehavior": {
+      "configFile": "vite.config.ts",
+      "rule": "When GITHUB_ACTIONS=true and GITHUB_REPOSITORY is set, Vite base becomes /<repo-name>/",
+      "example": "/coffee-tasting/"
+    },
+    "buildScripts": {
+      "dev": "pnpm dev",
+      "build": "pnpm build",
+      "preview": "pnpm preview",
+      "typecheck": "pnpm check"
+    }
+  },
+  "newStaticProjectGuide": {
+    "goal": "Create a brand new static website with a different repo name under the same GitHub account.",
+    "importantRule": "The new repo name affects the GitHub Pages base path. If the repo is named my-new-site, the site base path should resolve to /my-new-site/ during GitHub Pages builds.",
+    "recommendedApproach": [
+      "Create a new GitHub repository under the same account with the new project name.",
+      "Create a new local workspace/folder for that repo.",
+      "Initialize a new Vite static project or clone a starter.",
+      "Use a docs folder as the published output if you want to keep the same Pages workflow.",
+      "Push to the new repository and configure GitHub Pages to deploy from main/docs."
+    ],
+    "newRepoVariables": {
+      "githubAccount": "your existing GitHub account",
+      "newRepoName": "replace-this-with-new-repo-name",
+      "newWorkspacePath": "C:/Users/wwwpa/Downloads/replace-this-with-new-repo-name",
+      "expectedPagesBasePath": "/replace-this-with-new-repo-name/"
+    },
+    "minimumConfigForNewProject": {
+      "vite": {
+        "root": "client",
+        "buildOutDir": "../dist/public",
+        "baseRule": "const githubRepoName = process.env.GITHUB_REPOSITORY?.split('/')[1]; const githubPagesBase = process.env.GITHUB_ACTIONS && githubRepoName ? `/${githubRepoName}/` : '/';"
+      },
+      "publishFlow": {
+        "step1": "Build with GITHUB_ACTIONS=true and GITHUB_REPOSITORY=<account>/<repo>",
+        "step2": "Copy dist/public contents into docs",
+        "step3": "Commit docs changes",
+        "step4": "Push main"
+      }
+    },
+    "stepByStep": [
+      "1. Create a new repo on GitHub with the new name.",
+      "2. Create a new local folder/workspace for that repo.",
+      "3. Initialize the app, for example with Vite.",
+      "4. Add a docs folder for GitHub Pages output.",
+      "5. Configure vite.config.ts so the base path uses the repo name from GITHUB_REPOSITORY.",
+      "6. Build the app with GitHub Pages env vars.",
+      "7. Copy the built static files into docs.",
+      "8. Push the repo to GitHub.",
+      "9. In GitHub Pages settings, set source to main branch and /docs folder."
+    ],
+    "exampleBuildSession": {
+      "windowsPowerShell": [
+        "$env:GITHUB_ACTIONS='true'",
+        "$env:GITHUB_REPOSITORY='your-account/your-new-repo'",
+        "pnpm build",
+        "Copy-Item -Path 'dist/public/*' -Destination 'docs' -Recurse -Force"
+      ]
+    },
+    "githubPagesSettings": {
+      "sourceBranch": "main",
+      "sourceFolder": "/docs",
+      "resultUrlPattern": "https://<github-account>.github.io/<repo-name>/"
+    }
+  },
+  "aiHandoff": {
+    "useThisFileFor": [
+      "telling another AI where this project lives",
+      "explaining how deployment works here",
+      "describing how to create a new static site repo with the same hosting pattern"
+    ],
+    "promptStarter": "Use project-hosting-context.json as the source of truth for workspace location, build output, GitHub Pages deployment pattern, and new-repo setup rules."
+  }
+}

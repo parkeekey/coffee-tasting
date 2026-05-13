@@ -86,6 +86,24 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry, ta
     selectedGroups.flatMap(group => group.tags)
   ));
 
+  const sensoryMemoryNotes = ((entry.hierarchicalFlavorNotes ?? []) as Array<{
+    id?: string;
+    memory?: string;
+    detailTypes?: string[];
+    flavorCategories?: string[];
+    detailType?: string;
+    flavorCategory?: string;
+    specificNote?: string;
+  }>)
+    .map((note, idx) => ({
+      id: note.id ?? `memory-${idx}`,
+      memory: (note.memory ?? '').trim(),
+      detailTypes: (note.detailTypes ?? [note.detailType ?? '']).map((v) => v.trim()).filter(Boolean),
+      flavorCategories: (note.flavorCategories ?? [note.flavorCategory ?? '']).map((v) => v.trim()).filter(Boolean),
+      specificNote: (note.specificNote ?? '').trim(),
+    }))
+    .filter((note) => note.memory || note.detailTypes.length > 0 || note.flavorCategories.length > 0 || note.specificNote);
+
   const notes = (entry.notes ?? '').trim();
 
   return (
@@ -329,6 +347,40 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(({ entry, ta
               <span key={tag} style={{ fontSize: 10, fontWeight: 600, background: '#1f2937', color: '#fff', padding: '3px 9px', borderRadius: 99 }}>
                 {tag}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sensoryMemoryNotes.length > 0 && (
+        <div style={{ padding: '10px 20px 4px', background: '#fffdf9' }}>
+          <div style={{ fontSize: 9, color: '#6d28d9', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: 0.35 }}>
+            Sensory Memory Notes
+          </div>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {sensoryMemoryNotes.map((note) => (
+              <div key={note.id} style={{ background: '#ffffff', border: '1px solid #ddd6fe', borderRadius: 10, padding: '6px 8px' }}>
+                {note.memory && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#5b21b6', marginBottom: 2 }}>
+                    {note.memory}
+                  </div>
+                )}
+                {note.detailTypes.length > 0 && (
+                  <div style={{ fontSize: 9, color: '#6b7280', marginBottom: 1 }}>
+                    L2: {note.detailTypes.join(', ')}
+                  </div>
+                )}
+                {note.flavorCategories.length > 0 && (
+                  <div style={{ fontSize: 9, color: '#6b7280', marginBottom: note.specificNote ? 1 : 0 }}>
+                    L3: {note.flavorCategories.join(', ')}
+                  </div>
+                )}
+                {note.specificNote && (
+                  <div style={{ fontSize: 9, color: '#7c3aed', fontStyle: 'italic' }}>
+                    "{note.specificNote}"
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>

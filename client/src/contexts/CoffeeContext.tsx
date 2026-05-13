@@ -6,6 +6,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   CoffeeEntry,
+  HierarchicalFlavorNote,
   TastingScores,
   calculateTotalScore,
   createEmptyEntry,
@@ -42,6 +43,7 @@ interface CoffeeContextValue {
   updateDraftMouthfeelDescriptors: (descriptors: string[]) => void;
   updateDraftAftertasteDescriptors: (descriptors: string[]) => void;
   updateDraftOverallDescriptors: (descriptors: string[]) => void;
+  updateDraftHierarchicalFlavorNotes: (notes: HierarchicalFlavorNote[]) => void;
   toggleFocusedAttribute: (key: keyof TastingScores) => void;
   saveDraft: () => void;
   resetDraft: () => void;
@@ -273,6 +275,10 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
     setDraft(prev => ({ ...prev, overallDescriptors: descriptors }));
   }, []);
 
+  const updateDraftHierarchicalFlavorNotes = useCallback((notes: HierarchicalFlavorNote[]) => {
+    setDraft(prev => ({ ...prev, hierarchicalFlavorNotes: notes }));
+  }, []);
+
   const saveDraft = useCallback(() => {
     const now = new Date().toISOString();
     if (isEditingExisting) {
@@ -310,7 +316,7 @@ export function CoffeeProvider({ children }: { children: React.ReactNode }) {
   return (
     <CoffeeContext.Provider value={{
       entries, addEntry, updateEntry, deleteEntry, toggleFavorite, importEntries,
-      draft, setDraft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors,
+      draft, setDraft, updateDraftScore, updateDraftSensoryNote, updateDraftSensoryReaction, updateDraftField, updateDraftAromaDescriptors, updateDraftBrewPours, updateDraftSweetnessDescriptors, updateDraftSweetnessDetailDescriptors, updateDraftAcidityDescriptors, updateDraftAcidityTypeDescriptors, updateDraftIntensityDescriptors, updateDraftMouthfeelDescriptors, updateDraftAftertasteDescriptors, updateDraftOverallDescriptors, updateDraftHierarchicalFlavorNotes,
       toggleFocusedAttribute,
       saveDraft, resetDraft, editEntry, isEditingExisting,
       activeTab, setActiveTab,

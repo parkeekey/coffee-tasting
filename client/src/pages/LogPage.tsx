@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Heart, Edit2, Trash2, Coffee, Star, ChevronDown, ChevronUp, Search, Flag, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { useCoffee } from '@/contexts/CoffeeContext';
-import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, createTasteEntryFromPadCup, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
+import { calculateExtractionYieldPercent, calculateTotalScore, classifyCombinedExtractionReport, classifyExtractionYield, classifyTdsByRatioReference, classifyTdsByRatioStrengthZone, classifyTdsByStrengthZone, CoffeeEntry, createTasteEntryFromPadCup, DESCRIPTOR_SENTIMENT, estimateExtractionYieldFromQuickGuide, estimateExtractionYieldFromRatioReference, estimateWaterOut, getScoreHex, SCORE_ATTRIBUTES, getAttributeLabel } from '@/lib/coffeeTypes';
 
 function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const { entries, toggleFavorite, deleteEntry, editEntry, resetDraft, setActiveTab, setDraft, showPadScore100 } = useCoffee();
@@ -31,6 +32,8 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
   const [selectedPadCupIndex, setSelectedPadCupIndex] = useState(0);
   const [focusedPadCupIndexes, setFocusedPadCupIndexes] = useState<Set<number>>(new Set([0]));
   const [showPadCupImportPanel, setShowPadCupImportPanel] = useState(true);
+  const [showPositive, setShowPositive] = useState(true);
+  const [showNegative, setShowNegative] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
   const color = getScoreHex(entry.totalScore);
   const mode = entry.entryMode ?? ((entry.notes ?? '').includes('[TastePad]') ? 'pad' : 'tasting');
@@ -172,6 +175,28 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
   };
 
   const selectedPadCup = selectedPadCupIndex === -1 ? null : (normalizedPadCups[selectedPadCupIndex] ?? normalizedPadCups[0]);
+
+  const sensoryMemoryNotes = useMemo(() => {
+    const raw = (entry.hierarchicalFlavorNotes ?? []) as Array<{
+      id?: string;
+      memory?: string;
+      detailTypes?: string[];
+      flavorCategories?: string[];
+      detailType?: string;
+      flavorCategory?: string;
+      specificNote?: string;
+    }>;
+
+    return raw
+      .map((note, idx) => ({
+        id: note.id ?? `memory-${idx}`,
+        memory: (note.memory ?? '').trim(),
+        detailTypes: (note.detailTypes ?? [note.detailType ?? '']).map((v) => v.trim()).filter(Boolean),
+        flavorCategories: (note.flavorCategories ?? [note.flavorCategory ?? '']).map((v) => v.trim()).filter(Boolean),
+        specificNote: (note.specificNote ?? '').trim(),
+      }))
+      .filter((note) => note.memory || note.detailTypes.length > 0 || note.flavorCategories.length > 0 || note.specificNote);
+  }, [entry.hierarchicalFlavorNotes]);
 
   const togglePadCupFocus = (idx: number) => {
     setFocusedPadCupIndexes(prev => {
@@ -682,6 +707,13 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                   const note = entry.sensoryNotes?.[attr.key] ?? '';
                   const focused = entry.focusedAttributes.includes(attr.key);
 
+                  // Filter based on toggle state
+                  const isPositive = reaction === 'like' || score >= 6;
+                  const isNegative = reaction === 'dislike' || score <= 3;
+
+                  if (!showPositive && isPositive) return null;
+                  if (!showNegative && isNegative) return null;
+
                   const levelStyle = level.label === 'Low'
                     ? 'bg-rose-100 text-rose-700'
                     : level.label === 'Med'
@@ -793,7 +825,32 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
                             </td>
                             <td className="px-1.5 py-1 text-center">{[pour.timeStart, pour.timeEnd].filter(Boolean).join('–') || '—'}</td>
                             <td className="px-1.5 py-1 text-center">{pour.flowRate || '—'}</td>
-                            <td className="px-1.5 py-1 text-center">{pour.action || '—'}</td>
+                            <td className="px-1.5 py-1 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <span>{pour.action || '—'}</span>
+                                {(pour.tags ?? []).length > 0 && (
+                                  <div className="flex gap-1 flex-wrap justify-center">
+                                    {pour.tags?.map(tag => {
+                                      // Extraction phase tags with specific colors
+                                      const tagColor = tag === 'CO2 Bloom' ? 'bg-gray-500'
+                                        : tag === 'Acids/Lipids' ? 'bg-orange-400'
+                                        : tag === 'Sugars' ? 'bg-amber-700'
+                                        : tag === 'Plant Fibers' ? 'bg-green-800'
+                                        : tag === 'Stalling' || tag === 'Clogged' || tag === 'Fast Drain' ? 'bg-red-600'
+                                        : 'bg-cyan-600'; // Default for action tags (cyan)
+                                      return (
+                                        <span
+                                          key={tag}
+                                          className={`px-1.5 py-0.5 rounded text-[8px] font-medium text-white ${tagColor}`}
+                                        >
+                                          {tag}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}
@@ -872,6 +929,31 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
               })()}
             </div>
           )}
+          {/* Positive/Negative Attribute Toggles */}
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => setShowPositive(!showPositive)}
+              className={cn(
+                'px-2 py-0.5 rounded text-[10px] font-medium border transition-colors',
+                showPositive
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-emerald-100 text-emerald-700 border-emerald-600 hover:opacity-80'
+              )}
+            >
+              Positive
+            </button>
+            <button
+              onClick={() => setShowNegative(!showNegative)}
+              className={cn(
+                'px-2 py-0.5 rounded text-[10px] font-medium border transition-colors',
+                showNegative
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-rose-100 text-rose-700 border-rose-600 hover:opacity-80'
+              )}
+            >
+              Negative
+            </button>
+          </div>
           {/* TDS & EY for non-brewing entries */}
           {!isBrewingEntry && entry.brewTDS && (() => {
             const tds = parseFloat(entry.brewTDS);
@@ -933,14 +1015,25 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
               <p className="text-xs text-orange-900 font-medium mb-1">👃 Aroma Standard Tags:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.aromaDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-orange-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.aromaDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  // Filter based on toggle state
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-orange-500';
+
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -948,14 +1041,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
               <p className="text-xs text-orange-900 font-medium mb-1">🍬 Sweetness Style:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.sweetnessDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-yellow-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.sweetnessDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-yellow-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -963,14 +1064,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-100">
               <p className="text-xs text-orange-900 font-medium mb-1">🍯 Sweetness Details:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.sweetnessDetailDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-orange-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.sweetnessDetailDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-orange-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -978,14 +1087,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
               <p className="text-xs text-yellow-900 font-medium mb-1">🍋 Acidity Flavors:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.acidityDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-amber-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.acidityDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-amber-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -993,14 +1110,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
               <p className="text-xs text-yellow-900 font-medium mb-1">🧪 Acidity Types (Auto):</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.acidityTypeDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-amber-700 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.acidityTypeDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-amber-700';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1008,14 +1133,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-100">
               <p className="text-xs text-yellow-900 font-medium mb-1">⚡ Acidity Intensity:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.intensityDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-amber-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.intensityDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-amber-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1023,14 +1156,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
               <p className="text-xs text-blue-900 font-medium mb-1">☕ Mouthfeel Types:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.mouthfeelDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-blue-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.mouthfeelDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-blue-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1038,14 +1179,22 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-purple-50 rounded-lg border border-purple-100">
               <p className="text-xs text-purple-900 font-medium mb-1">✨ Aftertaste Length:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.aftertasteDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-purple-500 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
-                ))}
+                {(entry.aftertasteDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-purple-500';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1053,13 +1202,48 @@ function EntryCard({ entry }: { entry: CoffeeEntry }) {
             <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
               <p className="text-xs text-slate-900 font-medium mb-1">🌟 Coffee Character Profile:</p>
               <div className="flex flex-wrap gap-1">
-                {(entry.overallDescriptors ?? []).map((descriptor) => (
-                  <span
-                    key={descriptor}
-                    className="text-xs px-2 py-1 rounded-full bg-slate-600 text-white font-medium"
-                  >
-                    {descriptor}
-                  </span>
+                {(entry.overallDescriptors ?? []).map((descriptor) => {
+                  const sentiment = DESCRIPTOR_SENTIMENT[descriptor] ?? 'neutral';
+                  if (!showPositive && sentiment === 'positive') return null;
+                  if (!showNegative && sentiment === 'negative') return null;
+                  const bgColor = sentiment === 'positive' ? 'bg-emerald-500'
+                    : sentiment === 'negative' ? 'bg-rose-500'
+                    : 'bg-slate-600';
+                  return (
+                    <span
+                      key={descriptor}
+                      className={`text-xs px-2 py-1 rounded-full ${bgColor} text-white font-medium`}
+                    >
+                      {descriptor}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {sensoryMemoryNotes.length > 0 && (
+            <div className="mt-2 p-2 bg-violet-50 rounded-lg border border-violet-200">
+              <p className="text-xs text-violet-900 font-medium mb-1">🧠 Sensory Memory Notes:</p>
+              <div className="space-y-1.5">
+                {sensoryMemoryNotes.map((note) => (
+                  <div key={note.id} className="rounded border border-violet-200 bg-white/80 px-2 py-1.5">
+                    {note.memory && (
+                      <p className="text-xs font-semibold text-violet-900">{note.memory}</p>
+                    )}
+                    {note.detailTypes.length > 0 && (
+                      <p className="text-[11px] text-violet-800 mt-0.5">
+                        L2: {note.detailTypes.join(', ')}
+                      </p>
+                    )}
+                    {note.flavorCategories.length > 0 && (
+                      <p className="text-[11px] text-violet-800 mt-0.5">
+                        L3: {note.flavorCategories.join(', ')}
+                      </p>
+                    )}
+                    {note.specificNote && (
+                      <p className="text-[11px] italic text-violet-700 mt-1">"{note.specificNote}"</p>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

@@ -73,7 +73,7 @@ export function BrewingRecipeSection({
   const waterInNum = useMemo(() => {
     const dose = parseFloat(draft.brewDose ?? '');
     const mult = parseRatioDenominator(draft.brewRatio ?? '');
-    if (!isNaN(dose) && !isNaN(mult) && dose > 0 && mult > 0) return dose * mult;
+    if (!isNaN(dose) && mult !== null && !isNaN(mult) && dose > 0 && mult > 0) return dose * mult;
     return null;
   }, [draft.brewDose, draft.brewRatio]);
 
@@ -112,7 +112,7 @@ export function BrewingRecipeSection({
   const usedPercent = Number(pours[pours.length - 1]?.percent) || 0;
   const remaining = 100 - usedPercent;
 
-  const updatePour = (index: number, key: keyof BrewPour, value: string | number) => {
+  const updatePour = (index: number, key: keyof BrewPour, value: string | number | string[]) => {
     const next = pours.map((p, i) => (i === index ? { ...p, [key]: value } : p));
     onPoursChange(next);
   };
@@ -376,9 +376,97 @@ export function BrewingRecipeSection({
                             value={pour.action ?? ''}
                             onChange={e => updatePour(i, 'action', e.target.value)}
                             autoFocus={openNoteRows.has(pour.id) && !pour.action}
-                            className="w-full bg-transparent border-b border-dashed border-cyan-300 pb-0.5 focus:outline-none focus:border-cyan-600 text-[11px] text-cyan-800 placeholder:text-cyan-400/60"
+                            className="w-full bg-transparent border-b border-dashed border-cyan-300 pb-0.5 focus:outline-none focus:border-cyan-600 text-[11px] text-cyan-800 placeholder:text-cyan-400/60 mb-2"
                             placeholder="note…"
                           />
+                          <div className="space-y-2 mt-2">
+                            {/* Brewing Action Tags */}
+                            <div className="flex gap-2 flex-wrap">
+                              {['Switch on', 'Switch off', 'Swirl', 'Stirred', 'Bed dry', 'Bed Saturated', 'Slower pour', 'Faster pour'].map(tag => {
+                                const isActive = (pour.tags ?? []).includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentTags = pour.tags ?? [];
+                                      const newTags = isActive
+                                        ? currentTags.filter(t => t !== tag)
+                                        : [...currentTags, tag];
+                                      updatePour(i, 'tags', newTags);
+                                    }}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded text-[10px] font-medium transition-colors border',
+                                      isActive
+                                        ? 'bg-cyan-600 text-white border-cyan-600'
+                                        : 'bg-cyan-100 text-cyan-700 border-cyan-600 hover:opacity-80'
+                                    )}
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* Extraction Phase Tags */}
+                            <div className="flex gap-2 flex-wrap">
+                              {[
+                                { tag: 'CO2 Bloom', bg: 'bg-gray-100', border: 'border-gray-500', activeBg: 'bg-gray-500', text: 'text-gray-700', activeText: 'text-white' },
+                                { tag: 'Acids/Lipids', bg: 'bg-orange-100', border: 'border-orange-400', activeBg: 'bg-orange-400', text: 'text-orange-700', activeText: 'text-white' },
+                                { tag: 'Sugars', bg: 'bg-amber-100', border: 'border-amber-700', activeBg: 'bg-amber-700', text: 'text-amber-700', activeText: 'text-white' },
+                                { tag: 'Plant Fibers', bg: 'bg-green-100', border: 'border-green-800', activeBg: 'bg-green-800', text: 'text-green-700', activeText: 'text-white' },
+                              ].map(({ tag, bg, border, activeBg, text, activeText }) => {
+                                const isActive = (pour.tags ?? []).includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentTags = pour.tags ?? [];
+                                      const newTags = isActive
+                                        ? currentTags.filter(t => t !== tag)
+                                        : [...currentTags, tag];
+                                      updatePour(i, 'tags', newTags);
+                                    }}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded text-[10px] font-medium transition-colors border',
+                                      isActive
+                                        ? `${activeBg} ${activeText}`
+                                        : `${bg} ${border} ${text} hover:opacity-80`
+                                    )}
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* Warning Tags */}
+                            <div className="flex gap-2 flex-wrap">
+                              {['Stalling', 'Clogged', 'Fast Drain'].map(tag => {
+                                const isActive = (pour.tags ?? []).includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => {
+                                      const currentTags = pour.tags ?? [];
+                                      const newTags = isActive
+                                        ? currentTags.filter(t => t !== tag)
+                                        : [...currentTags, tag];
+                                      updatePour(i, 'tags', newTags);
+                                    }}
+                                    className={cn(
+                                      'px-2 py-0.5 rounded text-[10px] font-medium transition-colors border',
+                                      isActive
+                                        ? 'bg-red-600 text-white border-red-600'
+                                        : 'bg-red-100 text-red-700 border-red-600 hover:opacity-80'
+                                    )}
+                                  >
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     )}

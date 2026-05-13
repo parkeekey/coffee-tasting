@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "meta": {
+    "name": "Manus Specialty Lab Mobile Style Guide",
+    "version": "1.0.0",
+    "intent": "Guide AI/codegen for a blank mobile-first project that matches the coffee-tasting app visual language",
+    "sourceProject": "coffee-tasting",
+    "platform": "mobile-first web app",
+    "maxContentWidthPx": 480,
+    "notes": [
+      "Prioritize phone layout first, then scale up",
+      "Keep warm scientific minimalism; avoid generic template look"
+    ]
+  },
+  "designDirection": {
+    "name": "Specialty Lab",
+    "summary": "Warm scientific minimalism with coffee-brown primary, amber accents, clean cards, and data-forward micro-panels.",
+    "mood": [
+      "precise",
+      "warm",
+      "clean",
+      "analytical",
+      "crafted"
+    ],
+    "do": [
+      "Use coffee-brown gradients for hero headers",
+      "Use off-white app background with white cards",
+      "Use compact data rows and clear numeric hierarchy",
+      "Use subtle borders and rounded corners for sections",
+      "Keep touch targets large and thumb-friendly"
+    ],
+    "avoid": [
+      "Neon palettes",
+      "Overly dark dashboards",
+      "Dense desktop tables on phone",
+      "Over-animated transitions",
+      "Flat one-layer screens without visual grouping"
+    ]
+  },
+  "tokens": {
+    "color": {
+      "primary": "oklch(0.38 0.08 35)",
+      "primaryForeground": "oklch(0.98 0.005 60)",
+      "accent": "oklch(0.72 0.12 60)",
+      "accentForeground": "oklch(0.18 0.04 35)",
+      "background": "oklch(0.985 0.003 80)",
+      "foreground": "oklch(0.18 0.02 35)",
+      "card": "oklch(1 0 0)",
+      "muted": "oklch(0.94 0.005 80)",
+      "mutedForeground": "oklch(0.52 0.02 60)",
+      "border": "oklch(0.88 0.008 60)",
+      "ring": "oklch(0.38 0.08 35)",
+      "scoreLow": "oklch(0.65 0.18 25)",
+      "scoreMid": "oklch(0.72 0.14 50)",
+      "scoreGood": "oklch(0.65 0.12 130)",
+      "scoreGreat": "oklch(0.52 0.10 145)"
+    },
+    "radius": {
+      "base": "0.75rem",
+      "card": "0.75rem",
+      "button": "0.5rem",
+      "pill": "9999px"
+    },
+    "typography": {
+      "display": "Fraunces, Georgia, serif",
+      "body": "DM Sans, system-ui, sans-serif",
+      "mono": "DM Mono, Courier New, monospace",
+      "scale": {
+        "heroTitle": "text-2xl",
+        "sectionLabel": "text-xs uppercase tracking-widest",
+        "body": "text-sm",
+        "caption": "text-[10px]",
+        "numericPrimary": "text-lg font-mono font-bold"
+      }
+    },
+    "shadow": {
+      "card": "0 1px 2px rgba(0,0,0,0.05)",
+      "bottomNav": "0 -4px 20px oklch(0.18 0.02 35 / 0.06)"
+    },
+    "motion": {
+      "durationFastMs": 150,
+      "durationBaseMs": 300,
+      "easing": "ease",
+      "entryAnimation": "fadeSlideUp"
+    }
+  },
+  "mobileLayout": {
+    "viewport": {
+      "targetWidthRangePx": [
+        320,
+        480
+      ],
+      "safeAreaSupport": true
+    },
+    "appShell": {
+      "top": "hero or page header",
+      "content": "scrollable column",
+      "bottom": "fixed bottom action/nav with safe-area padding",
+      "contentPaddingX": 16,
+      "contentPaddingBottom": 96
+    },
+    "breakpoints": {
+      "sm": 640,
+      "lg": 1024
+    },
+    "containerRule": {
+      "default": "full width with side padding",
+      "largeScreens": "cap content width at 480px and center"
+    }
+  },
+  "componentRecipes": {
+    "heroHeader": {
+      "structure": [
+        "relative container",
+        "brown gradient background",
+        "optional texture image overlay at low opacity",
+        "eyebrow label + title + subtitle",
+        "optional right-side score widget"
+      ],
+      "visual": {
+        "minHeightPx": 160,
+        "gradient": "linear-gradient(135deg, oklch(0.38 0.08 35), oklch(0.28 0.06 35))",
+        "overlayOpacity": 0.15
+      }
+    },
+    "card": {
+      "structure": [
+        "white background",
+        "subtle border",
+        "rounded corners",
+        "tight vertical rhythm"
+      ],
+      "paddingPx": [
+        12,
+        16
+      ]
+    },
+    "segmentedSwitch": {
+      "usage": "mode toggles like Export/Settings",
+      "style": "rounded container with active pill",
+      "heightPx": 32
+    },
+    "slider": {
+      "trackHeightPx": 8,
+      "thumbSizePx": 28,
+      "thumbBorder": "3px solid white",
+      "thumbShadow": "coffee-brown tinted",
+      "focusRing": "accent color"
+    },
+    "radarPanel": {
+      "usage": "sensory radar with legends",
+      "rules": [
+        "Show hide/show toggle in panel header",
+        "Use emoji labels on axis points",
+        "Provide bar-style legends under chart",
+        "Legend cards: label, value, horizontal fill bar"
+      ]
+    },
+    "bottomActionBar": {
+      "position": "fixed bottom",
+      "maxWidthPx": 480,
+      "background": "white with light blur",
+      "borderTop": true,
+      "safeAreaBottom": true,
+      "buttonPattern": "secondary action + primary full-width action"
+    }
+  },
+  "interactionRules": {
+    "touchTargets": {
+      "minHeightPx": 40,
+      "preferred": 44
+    },
+    "feedback": {
+      "toasts": true,
+      "buttonStates": [
+        "default",
+        "hover",
+        "disabled",
+        "busy"
+      ],
+      "emptyStates": "icon + short title + one-line guidance"
+    },
+    "listBehavior": {
+      "longLists": "max-height with internal scroll",
+      "selection": "checkbox-like left indicator",
+      "rowDensity": "compact but tappable"
+    }
+  },
+  "informationDesign": {
+    "scorePresentation": {
+      "numeric": "mono font for primary values",
+      "thresholds": {
+        "low": "< 70",
+        "mid": "70-84.9",
+        "good": "85-89.9",
+        "great": ">= 90"
+      },
+      "colorCoding": true
+    },
+    "sections": [
+      "summary stats",
+      "format or mode selection",
+      "content preview",
+      "entry list",
+      "persistent bottom actions"
+    ]
+  },
+  "implementationHints": {
+    "stack": {
+      "framework": "React + TypeScript",
+      "styling": "Tailwind + CSS variables",
+      "uiKit": "shadcn-style primitives"
+    },
+    "cssVariableNames": [
+      "--primary",
+      "--accent",
+      "--background",
+      "--foreground",
+      "--border",
+      "--radius"
+    ],
+    "utilityClassesToMirror": [
+      "font-display",
+      "font-mono-custom",
+      "bottom-nav",
+      "animate-fade-slide-up"
+    ]
+  },
+  "aiPromptTemplate": {
+    "system": "Build a mobile-first web app UI using the Manus Specialty Lab style guide JSON. Maintain max content width 480px, warm scientific minimalism, coffee-brown primary, amber accents, white cards, and fixed bottom action/nav patterns.",
+    "constraints": [
+      "Design phone-first before desktop",
+      "Use clear section hierarchy",
+      "Keep controls thumb-friendly",
+      "Prefer compact data cards over large tables",
+      "Apply consistent typography and color tokens"
+    ],
+    "acceptanceChecks": [
+      "Looks coherent on 375x812 viewport",
+      "Bottom actions do not overlap content",
+      "Primary/secondary action contrast is clear",
+      "Numeric data is readable at a glance",
+      "No visual drift from token palette"
+    ]
+  }
+}
